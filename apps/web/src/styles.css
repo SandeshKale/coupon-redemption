@@ -1,0 +1,55 @@
+@import 'tailwindcss';
+@import './ui/tokens.css';
+
+@theme {
+  --color-ink: var(--c-ink);
+  --color-muted: var(--c-muted);
+  --color-success: var(--c-success);
+  --color-success-bg: var(--c-success-bg);
+  --color-danger: var(--c-danger);
+  --color-danger-bg: var(--c-danger-bg);
+  --color-warning-ink: var(--c-warning-ink);
+  --color-warning-bg: var(--c-warning-bg);
+  --color-focus: var(--c-focus);
+  --color-surface: var(--c-surface);
+  --color-surface-2: var(--c-surface-2);
+  --color-border: var(--c-border);
+  --font-sans: system-ui, 'Noto Sans', 'Noto Sans Devanagari', sans-serif;
+  --radius-card: var(--radius-card);
+  --radius-btn: var(--radius-btn);
+}
+
+html {
+  color: var(--c-ink);
+  background: var(--c-surface);
+  font-family: var(--font-sans);
+  line-height: 1.5;
+}
+
+/* §17: 3 px focus ring with 2 px offset, never removed. */
+:focus-visible {
+  outline: 3px solid var(--c-focus);
+  outline-offset: 2px;
+}
+
+/* 2.4.11: sticky bars never cover the focused element. */
+* {
+  scroll-margin-block: 96px;
+}
+
+.dealer {
+  font-size: 18px;
+}
+
+.backoffice {
+  font-size: 16px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

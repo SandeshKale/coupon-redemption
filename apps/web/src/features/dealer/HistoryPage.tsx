@@ -1,0 +1,86 @@
+import { type ReactNode, useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router';
+
+import { BatchList } from '../../lib/api/schemas.ts';
+import { type Key, useI18n } from '../../lib/i18n/index.ts';
+import { useServices } from '../../lib/services.ts';
+import {
+  Button,
+  EmptyState,
+  ErrorState,
+  Money,
+  painterTone,
+  Skeleton,
+  StatusPill,
+} from '../../ui/index.ts';
+
+const PAGE = 20;
+
+/** My coupons: batches with painter status; re-show the painter QR within 24 h (EC-096). */
+export function HistoryPage(): ReactNode {
+  const i = useI18n();
+  const { api } = useServices();
+  const [rows, setRows] = useState<BatchList | null>(null);
+  const [error, setError] = useState(false);
+  const [more, setMore] = useState(true);
+  const load = useCallback(
+    async (before: number | null) => {
+      const r = await api.rpc('my_batches', { p_limit: PAGE, p_before_id: before }, BatchList);
+      if (!r.ok) {
+        setError(true);
+        return;
+      }
+      setError(false);
+      setMore(r.data.length === PAGE);
+      setRows((xs) => (before === null ? r.data : [...(xs ?? []), ...r.data]));
+    },
+    [api],
+  );
+  useEffect(() => {
+    void load(null);
+  }, [load]);
+  if (rows === null) return error ? <ErrorState onRetry={() => void load(null)} /> : <Skeleton />;
+  return (
+    <div className="flex flex-col gap-3">
+      <h1 className="text-2xl font-bold">{i.t('history.title')}</h1>
+      {rows.length === 0 ? <EmptyState>{i.t('history.empty')}</EmptyState> : null}
+      <ul className="flex flex-col gap-2">
+        {rows.map((b) => (
+          <li
+            key={b.batch_id}
+            className="flex flex-col gap-1 rounded-card border border-border p-3"
+          >
+            <p className="flex justify-between font-semibold">
+              <span>{i.t('receipt.count', { count: b.count })}</span>
+              <Money paise={b.value_paise} />
+            </p>
+            <p className="text-sm text-muted">
+              {i.dateTime(b.created_at)} · {i.t('history.by', { name: b.redeemed_by })}
+            </p>
+            <p>
+              <StatusPill tone={painterTone(b.painter_status)}>
+                {i.t(`pstatus.${b.painter_status}` as Key)}
+              </StatusPill>
+            </p>
+            {b.token === null ? null : (
+              <Link
+                to={`/receipt/${b.batch_id}`}
+                className="font-semibold underline underline-offset-4"
+              >
+                {i.t('history.showQr')}
+              </Link>
+            )}
+          </li>
+        ))}
+      </ul>
+      {more && rows.length > 0 ? (
+        <Button
+          variant="secondary"
+          onClick={() => void load(rows[rows.length - 1]?.batch_id ?? null)}
+        >
+          {i.t('history.more')}
+        </Button>
+      ) : null}
+    </div>
+  );
+}

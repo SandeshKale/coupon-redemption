@@ -1,0 +1,41 @@
+import type { ReactNode } from 'react';
+
+export type ResultVariant = 'valid' | 'invalid' | 'checking' | 'warning';
+
+const STYLE: Record<ResultVariant, { box: string; icon: string }> = {
+  valid: { box: 'bg-success-bg text-success border-success', icon: '✓' },
+  invalid: { box: 'bg-danger-bg text-danger border-danger', icon: '✕' },
+  checking: { box: 'bg-warning-bg text-warning-ink border-warning-ink', icon: '⟳' },
+  warning: { box: 'bg-warning-bg text-warning-ink border-warning-ink', icon: '⚑' },
+};
+
+/**
+ * The answer is the biggest thing on the screen: icon + words + colour, never colour alone.
+ * Do-not-pay results are announced assertively (role=alert), everything else politely.
+ */
+export function ResultCard({
+  variant,
+  title,
+  children,
+}: {
+  readonly variant: ResultVariant;
+  readonly title: string;
+  readonly children?: ReactNode;
+}): ReactNode {
+  const s = STYLE[variant];
+  return (
+    <section
+      role={variant === 'invalid' ? 'alert' : 'status'}
+      aria-live={variant === 'invalid' ? 'assertive' : 'polite'}
+      className={`min-h-40 rounded-card border-2 p-5 ${s.box}`}
+    >
+      <p className="flex items-start gap-3 text-2xl font-bold">
+        <span aria-hidden="true" className="text-3xl leading-none">
+          {s.icon}
+        </span>
+        <span>{title}</span>
+      </p>
+      {children === undefined ? null : <div className="mt-3 text-ink">{children}</div>}
+    </section>
+  );
+}

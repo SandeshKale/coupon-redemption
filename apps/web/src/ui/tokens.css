@@ -1,0 +1,17 @@
+/* §16.2 design tokens. Contrast of every text/background pair is unit-tested (ui/tokens.test.ts). */
+:root {
+  --c-ink: #0f1b2d;
+  --c-muted: #4a5a70;
+  --c-success: #05603a;
+  --c-success-bg: #e7f6ee;
+  --c-danger: #a1161b;
+  --c-danger-bg: #fdecec;
+  --c-warning-ink: #7a3e00;
+  --c-warning-bg: #fff4e5;
+  --c-focus: #1d4ed8;
+  --c-surface: #fff;
+  --c-surface-2: #f4f6f9;
+  --c-border: #6b7a90;
+  --radius-card: 12px;
+  --radius-btn: 10px;
+}

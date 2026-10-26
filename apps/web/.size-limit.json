@@ -1,0 +1,28 @@
+[
+  {
+    "name": "dealer route JS (initial) — see ADR-0005 (plan: 90 KB)",
+    "path": ["dist/assets/index-*.js"],
+    "limit": "100 KB",
+    "gzip": true
+  },
+  { "name": "dealer route CSS", "path": "dist/assets/*.css", "limit": "12 KB", "gzip": true },
+  {
+    "name": "scanner fallback (lazy)",
+    "path": "dist/assets/zxing-*.js",
+    "limit": "150 KB",
+    "gzip": true
+  },
+  {
+    "name": "back-office (lazy)",
+    "path": ["dist/assets/BackOffice-*.js", "dist/assets/query-*.js"],
+    "limit": "250 KB",
+    "gzip": true
+  },
+  {
+    "name": "QR renderer (lazy)",
+    "path": "dist/assets/QrBlock-*.js",
+    "limit": "10 KB",
+    "gzip": true
+  },
+  { "name": "auth (lazy)", "path": "dist/assets/auth-*.js", "limit": "40 KB", "gzip": true }
+]

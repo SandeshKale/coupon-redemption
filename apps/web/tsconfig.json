@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "types": ["vite/client", "vite-plugin-pwa/client", "@testing-library/jest-dom/vitest"],
+    // Editor/ESLint/test config (includes tests). vitest re-exports vite's Node typings, which
+    // conflict under the strict lib check; application code is checked strictly by tsconfig.app.json.
+    "skipLibCheck": true
+  },
+  "include": ["src"],
+  "exclude": []
+}

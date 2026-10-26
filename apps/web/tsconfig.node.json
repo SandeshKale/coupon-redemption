@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "types": ["node"],
+    // Build-tool typings (vite, workbox-build) conflict with each other under the strict lib check;
+    // only these config files use them. Application code keeps skipLibCheck: false (tsconfig.json).
+    "skipLibCheck": true
+  },
+  "include": ["vite.config.ts", "vitest.config.ts"]
+}

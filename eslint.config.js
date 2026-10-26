@@ -35,7 +35,10 @@ export default tseslint.config(
       parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname },
       globals: { ...globals.browser },
     },
-    settings: { 'import-x/resolver': { typescript: true, node: true } },
+    settings: {
+      'import-x/resolver': { typescript: true, node: true },
+      'import-x/ignore': ['^virtual:'],
+    },
     rules: {
       '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-non-null-assertion': 'error',
@@ -52,6 +55,7 @@ export default tseslint.config(
       'import-x/order': ['error', { 'newlines-between': 'always', alphabetize: { order: 'asc' } }],
       // Object-injection fires on every typed record lookup; TS index types cover it.
       'security/detect-object-injection': 'off',
+      'import-x/no-unresolved': ['error', { ignore: ['^virtual:'] }],
     },
   },
   {
