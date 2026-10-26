@@ -1,0 +1,59 @@
+{
+  "name": "coupon-redemption",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "lint": "pnpm lint:ts && pnpm lint:css && pnpm lint:md && pnpm format:check",
+    "lint:ts": "eslint . --max-warnings 0",
+    "lint:css": "stylelint \"apps/web/src/**/*.css\" --max-warnings 0",
+    "lint:md": "markdownlint-cli2 \"**/*.md\" \"#**/node_modules\"",
+    "lint:deno": "cd supabase/functions && deno lint && deno fmt --check && deno check */index.ts",
+    "lint:sql": "sqlfluff lint supabase/migrations supabase/tests supabase/test-support supabase/seed.sql",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc -p packages/shared && tsc -p apps/web && tsc -p e2e",
+    "test": "pnpm -r --if-present test",
+    "test:shared": "pnpm --filter @24m/shared test",
+    "test:web": "pnpm --filter @24m/web test",
+    "test:deno": "cd supabase/functions && deno test --allow-env --allow-read --coverage=../../coverage/deno",
+    "test:db": "bash scripts/db-test.sh && bash scripts/db-meta-test.sh",
+    "test:e2e": "pnpm --filter @24m/web exec playwright test -c ../../e2e/playwright.config.ts",
+    "test:all": "pnpm lint && pnpm typecheck && pnpm test && pnpm test:deno && pnpm test:db",
+    "build": "pnpm -r --if-present build",
+    "size": "pnpm --filter @24m/web size",
+    "knip": "knip",
+    "prepare": "lefthook install || true"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "19.8.1",
+    "@commitlint/config-conventional": "19.8.1",
+    "@eslint/js": "9.39.5",
+    "eslint": "9.39.5",
+    "eslint-import-resolver-typescript": "4.4.5",
+    "eslint-plugin-import-x": "4.17.1",
+    "eslint-plugin-jsx-a11y": "6.10.2",
+    "eslint-plugin-react": "7.37.5",
+    "eslint-plugin-react-hooks": "5.2.0",
+    "eslint-plugin-security": "4.2.0",
+    "globals": "16.5.0",
+    "knip": "5.88.1",
+    "lefthook": "1.13.6",
+    "markdownlint-cli2": "0.18.1",
+    "prettier": "3.9.10",
+    "stylelint": "16.26.1",
+    "stylelint-config-standard": "38.0.0",
+    "stylelint-order": "7.0.1",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.72.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "lefthook",
+      "esbuild"
+    ]
+  }
+}

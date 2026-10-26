@@ -1,0 +1,15 @@
+node_modules/
+dist/
+coverage/
+.stryker-tmp/
+reports/
+playwright-report/
+test-results/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+supabase/.temp/
+supabase/.branches/
+.lighthouseci/

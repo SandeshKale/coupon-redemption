@@ -1,0 +1,19 @@
+[sqlfluff]
+dialect = postgres
+templater = raw
+max_line_length = 140
+# PL/pgSQL bodies are opaque to sqlfluff; plpgsql_check validates them in CI.
+# House-style exclusions (layout only, no correctness impact):
+#   LT14 short WHERE on the same line; AL03 pgTAP assertions are unaliased selects;
+#   ST09 join order; LT06 `= any (…)` spacing; RF01 policies reference the outer table.
+exclude_rules = LT05, AM04, ST06, RF04, CP02, LT02, LT01, CV06, ST05, AL01, LT12, AL05, RF02, RF03, ST07, AM05, CV02, AL09, CP03, LT09, LT14, AL03, ST09, LT06, RF01
+large_file_skip_byte_limit = 0
+
+[sqlfluff:indentation]
+tab_space_size = 2
+
+[sqlfluff:rules:capitalisation.keywords]
+capitalisation_policy = lower
+
+[sqlfluff:rules:capitalisation.types]
+extended_capitalisation_policy = lower

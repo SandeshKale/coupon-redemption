@@ -1,0 +1,8 @@
+title = "coupon-redemption gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Test fixtures use obviously fake secrets"
+paths = ['''supabase/functions/_shared/fixtures/.*''', '''supabase/functions/.*_test\.ts''']

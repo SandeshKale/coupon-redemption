@@ -1,0 +1,18 @@
+pre-commit:
+  parallel: true
+  commands:
+    eslint:
+      glob: '*.{ts,tsx}'
+      run: pnpm exec eslint --max-warnings 0 --no-warn-ignored {staged_files}
+    prettier:
+      glob: '*.{ts,tsx,json,md,css,yml,yaml}'
+      run: pnpm exec prettier --check {staged_files}
+    sqlfluff:
+      glob: 'supabase/**/*.sql'
+      run: sqlfluff lint {staged_files}
+    gitleaks:
+      run: gitleaks protect --staged --redact
+commit-msg:
+  commands:
+    commitlint:
+      run: pnpm exec commitlint --edit {1}
