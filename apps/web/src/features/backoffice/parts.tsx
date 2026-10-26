@@ -130,7 +130,7 @@ export function ActionForm({
       className="grid gap-3 sm:grid-cols-2"
       onSubmit={(e) => {
         e.preventDefault();
-        void onSubmit(values);
+        void onSubmit(Object.fromEntries(fields.map((f) => [f.name, effective(f, values)])));
       }}
     >
       {fields.map((f) =>
@@ -139,7 +139,7 @@ export function ActionForm({
             key={f.name}
             label={t(f.label)}
             options={f.options}
-            value={values[f.name] ?? ''}
+            value={effective(f, values)}
             onChange={(val) => {
               set(f.name, val);
             }}
@@ -148,7 +148,7 @@ export function ActionForm({
           <TextArea
             key={f.name}
             label={t(f.label)}
-            value={values[f.name] ?? ''}
+            value={effective(f, values)}
             onChange={(val) => {
               set(f.name, val);
             }}
@@ -159,7 +159,7 @@ export function ActionForm({
             label={t(f.label)}
             type={f.type ?? 'text'}
             required={f.required ?? true}
-            value={values[f.name] ?? ''}
+            value={effective(f, values)}
             onChange={(e) => {
               set(f.name, e.target.value);
             }}
@@ -201,6 +201,12 @@ function TextArea({
       />
     </div>
   );
+}
+
+/** Options often load after the form renders: an untouched select means its first option. */
+function effective(f: FieldSpec, values: Record<string, string>): string {
+  const v = values[f.name] ?? '';
+  return v === '' && f.options !== undefined ? (f.options[0]?.value ?? '') : v;
 }
 
 export const nullIfEmpty = (s: string | undefined): string | null =>

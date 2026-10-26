@@ -48,7 +48,7 @@ function useHome(): {
 }
 
 /** Home: Scan / Scan many / Type code + today and month totals. */
-export function HomePage({ role }: { readonly role: string }): ReactNode {
+export function HomePage({ userRole }: { readonly userRole: string }): ReactNode {
   const i = useI18n();
   const { home, stale, failed, reload } = useHome();
   return (
@@ -95,7 +95,7 @@ export function HomePage({ role }: { readonly role: string }): ReactNode {
           ) : null}
         </section>
       )}
-      <DealerNav owner={role === 'DEALER_OWNER'} />
+      <DealerNav owner={userRole === 'DEALER_OWNER'} />
     </div>
   );
 }

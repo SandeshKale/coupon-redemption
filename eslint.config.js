@@ -95,6 +95,21 @@ export default tseslint.config(
     },
   },
   {
+    files: ['scripts/**/*.mjs'],
+    ...tseslint.configs.disableTypeChecked,
+    languageOptions: {
+      ...tseslint.configs.disableTypeChecked.languageOptions,
+      globals: { ...globals.node },
+    },
+    rules: {
+      ...tseslint.configs.disableTypeChecked.rules,
+      'no-console': 'off',
+      'security/detect-non-literal-fs-filename': 'off',
+      'security/detect-object-injection': 'off',
+      'security/detect-non-literal-regexp': 'off',
+    },
+  },
+  {
     files: ['**/scripts/**/*.ts'],
     languageOptions: { globals: { ...globals.node } },
     rules: { 'security/detect-non-literal-fs-filename': 'off' },
@@ -105,6 +120,9 @@ export default tseslint.config(
       'max-lines-per-function': 'off',
       'react/jsx-no-literals': 'off',
       '@typescript-eslint/no-non-null-assertion': 'off',
+      // Tests read checked-in fixtures by constant paths.
+      'security/detect-non-literal-fs-filename': 'off',
+      'security/detect-non-literal-regexp': 'off',
     },
   },
 );

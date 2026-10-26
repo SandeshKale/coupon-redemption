@@ -310,7 +310,7 @@ function UploadSection(): ReactNode {
       method: 'POST',
       query: `?dry_run=${String(dryRun)}`,
       headers: { 'content-type': 'text/csv' },
-      body: await file.text(),
+      body: await new Response(file).text(),
     });
     setReport(JSON.stringify(await res.json().catch(() => ({})), null, 1));
   };
@@ -358,7 +358,7 @@ function DealersMaster(): ReactNode {
         columns={cols(i.t, ['code', 'name', 'mobile_e164', 'distributor_id', 'status'])}
       />
       <ActionForm
-        submitLabel={i.t('col.distributor')}
+        submitLabel={i.t('common.save')}
         fields={[
           { name: 'dealer', label: 'col.dealer', type: 'number' },
           { name: 'dist', label: 'col.distributor', type: 'number' },

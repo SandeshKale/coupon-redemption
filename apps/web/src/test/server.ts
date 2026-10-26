@@ -6,7 +6,7 @@ export const API = 'http://api.test';
 export const server = setupServer();
 
 type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
-type Responder = Json | ((args: Record<string, unknown>) => Json | Response);
+type Responder = Json | Response | ((args: Record<string, unknown>) => Json | Response);
 
 /** Registers RPC responses by function name: value, function of args, or a Response (errors). */
 export function rpc(map: Record<string, Responder>): void {
@@ -17,7 +17,7 @@ export function rpc(map: Record<string, Responder>): void {
       if (r === undefined) return HttpResponse.json({ message: `unmocked ${fn}` }, { status: 404 });
       const args = (await request.json().catch(() => ({}))) as Record<string, unknown>;
       const out: Json | Response = typeof r === 'function' ? r(args) : r;
-      return out instanceof Response ? out : HttpResponse.json(out);
+      return out instanceof Response ? out.clone() : HttpResponse.json(out);
     }),
   );
 }
@@ -26,7 +26,7 @@ export function rest(map: Record<string, Json>): void {
   server.use(
     http.get(`${API}/rest/v1/*`, ({ request }) => {
       const url = new URL(request.url);
-      const key = Object.keys(map).find((k) => `${url.pathname}${url.search}`.includes(k));
+      const key = Object.keys(map).find((k) => url.pathname === `/rest/v1/${k}`);
       return key === undefined ? HttpResponse.json([]) : HttpResponse.json(map[key] ?? []);
     }),
   );

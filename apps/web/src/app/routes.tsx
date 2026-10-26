@@ -76,7 +76,7 @@ function dealerRoutes(): ReactNode {
     <>
       <Route
         index
-        element={<RoleGate roles={DEALER}>{(p) => <HomePage role={p.role} />}</RoleGate>}
+        element={<RoleGate roles={DEALER}>{(p) => <HomePage userRole={p.role} />}</RoleGate>}
       />
       <Route
         path="scan"

@@ -14,7 +14,7 @@ export type RedeemState =
   | { readonly phase: 'not_redeemed' }
   | { readonly phase: 'failed'; readonly error: ApiFailure };
 
-/** One Confirm = one idempotency key. The button is locked while a request is in flight (EC-023). */
+/** One Confirm = one idempotency key. Locked while in flight and after success (EC-023). */
 export function useRedeem(): {
   state: RedeemState;
   redeem: (codes: readonly string[]) => Promise<RedeemState>;
@@ -39,13 +39,20 @@ export function useRedeem(): {
               ? { phase: 'not_redeemed' }
               : { phase: 'failed', error: out.error };
         if (next.phase === 'done') reportTiming('confirm_to_receipt', performance.now() - started);
+        // Once redeemed, the button stays locked until we leave the screen (EC-023).
+        inFlight.current = next.phase === 'done';
         setState(next);
         return next;
-      } finally {
+      } catch (e) {
         inFlight.current = false;
+        throw e;
       }
     },
     [redeemDeps],
   );
-  return { state, redeem, busy: state.phase === 'saving' || state.phase === 'checking' };
+  return {
+    state,
+    redeem,
+    busy: state.phase === 'saving' || state.phase === 'checking' || state.phase === 'done',
+  };
 }

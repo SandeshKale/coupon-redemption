@@ -2,9 +2,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { type ReactNode, useState } from 'react';
 import { NavLink, Route, Routes } from 'react-router';
 
+import { outcomeUnknown } from '../../lib/api/client.ts';
 import type { Profile } from '../../lib/api/schemas.ts';
 import { type Key, useI18n } from '../../lib/i18n/index.ts';
 
+import { QueryError } from './data.ts';
 import {
   ClaimDetailPage,
   ClaimTo24mPage,
@@ -28,7 +30,15 @@ export function BackOffice({ profile }: { readonly profile: Profile }): ReactNod
   const [client] = useState(
     () =>
       new QueryClient({
-        defaultOptions: { queries: { retry: 2, staleTime: 15_000, refetchOnWindowFocus: false } },
+        defaultOptions: {
+          queries: {
+            // Retry only when the outcome is unknown (network/5xx); never on 4xx business errors.
+            retry: (count: number, e: unknown) =>
+              count < 2 && e instanceof QueryError && outcomeUnknown(e.failure),
+            staleTime: 15_000,
+            refetchOnWindowFocus: false,
+          },
+        },
       }),
   );
   const isDist = profile.role === 'DISTRIBUTOR';
