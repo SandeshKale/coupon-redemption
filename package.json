@@ -19,14 +19,15 @@
     "test": "pnpm -r --if-present test",
     "test:shared": "pnpm --filter @24m/shared test",
     "test:web": "pnpm --filter @24m/web test",
-    "test:deno": "cd supabase/functions && deno test --allow-env --allow-read --coverage=../../coverage/deno",
+    "test:deno": "cd supabase/functions && rm -rf ../../coverage/deno && deno test --allow-read --allow-env --coverage=../../coverage/deno && deno coverage ../../coverage/deno --lcov --output=../../coverage/deno.lcov --exclude='_test\\.ts$|test_util\\.ts$|/lib/|index\\.ts$|deps\\.ts$' && node ../../scripts/coverage-gate.mjs ../../coverage/deno.lcov 95 90 95",
     "test:db": "bash scripts/db-test.sh && bash scripts/db-meta-test.sh",
     "test:e2e": "pnpm --filter @24m/web exec playwright test -c ../../e2e/playwright.config.ts",
     "test:all": "pnpm lint && pnpm typecheck && pnpm test && pnpm test:deno && pnpm test:db",
     "build": "pnpm -r --if-present build",
     "size": "pnpm --filter @24m/web size",
     "knip": "knip",
-    "prepare": "lefthook install || true"
+    "prepare": "lefthook install || true",
+    "sync:shared": "node scripts/sync-shared.mjs"
   },
   "devDependencies": {
     "@commitlint/cli": "19.8.1",

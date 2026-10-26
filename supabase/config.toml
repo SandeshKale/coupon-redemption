@@ -1,0 +1,72 @@
+# Supabase CLI configuration (local stack + function deploy settings).
+project_id = "coupon-redemption"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+major_version = 17
+
+[db.seed]
+enabled = true
+sql_paths = ["./seed.sql"]
+
+[auth]
+enabled = true
+site_url = "http://localhost:5173"
+additional_redirect_urls = ["http://localhost:5173/auth/callback"]
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+refresh_token_reuse_interval = 10
+# §10.1: dealers stay logged in; sessions end only on revocation or 90 days of inactivity.
+enable_signup = false
+
+[auth.sessions]
+inactivity_timeout = "2160h"
+
+[auth.email]
+enable_signup = false
+double_confirm_changes = true
+enable_confirmations = false
+# One-time magic links valid 24 h (§10.1 step 2).
+otp_expiry = 86400
+
+[auth.mfa]
+max_enrolled_factors = 10
+
+[auth.mfa.totp]
+enroll_enabled = true
+verify_enabled = true
+
+# Functions that authenticate requests themselves (Meta signature, internal secret, public endpoints).
+[functions.wa-webhook]
+verify_jwt = false
+
+[functions.wa-sender]
+verify_jwt = false
+
+[functions.login-link-request]
+verify_jwt = false
+
+[functions.health]
+verify_jwt = false
+
+[functions.admin-create-user]
+verify_jwt = true
+
+[functions.admin-login-link]
+verify_jwt = true
+
+[functions.admin-user-status]
+verify_jwt = true
+
+[functions.bulk-upload]
+verify_jwt = true
+
+[functions.export-print-file]
+verify_jwt = true
