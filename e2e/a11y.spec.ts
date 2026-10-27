@@ -75,8 +75,8 @@ test.describe('§17 accessibility: 0 axe violations (WCAG 2.2 AA)', () => {
     await expect(page.locator('html')).toHaveAttribute('lang', 'hi');
     await expect(page.getByText('कूपन स्कैन करें').first()).toBeVisible();
     await axe(page);
-    await page.getByLabel('भाषा').selectOption('mr');
-    await expect(page.locator('html')).toHaveAttribute('lang', 'mr');
+    await page.getByLabel('भाषा').selectOption('kn');
+    await expect(page.locator('html')).toHaveAttribute('lang', 'kn');
   });
 
   test('1.4.10 reflow at 320 px and 1.4.4 200% text: no horizontal scrolling', async ({ page }) => {

@@ -1,4 +1,4 @@
-/** English copy deck (Appendix A). hi.ts and mr.ts must provide every key (type-checked). */
+/** English copy deck (Appendix A). hi.ts and kn.ts must provide every key (type-checked). */
 export const en = {
   'app.name': '24M Coupons',
   'nav.home': 'Home',
@@ -22,7 +22,7 @@ export const en = {
   'lang.label': 'Language',
   'lang.en': 'English',
   'lang.hi': 'हिन्दी',
-  'lang.mr': 'मराठी',
+  'lang.kn': 'ಕನ್ನಡ',
   'common.retry': 'Try again',
   'common.back': 'Back',
   'common.cancel': 'Cancel',

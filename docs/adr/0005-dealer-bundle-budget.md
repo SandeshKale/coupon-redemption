@@ -15,7 +15,7 @@ Its floor is fixed by dependencies the plan itself chooses:
 | Valibot schemas, thin API client, i18n (en), network status, UI kit, shell | ≈ 20 KB    |
 
 Everything else already loads on demand: auth SDK (25 KB), scanner fallback (107 KB), back-office
-(25 KB), QR renderer (8 KB), Sentry, Hindi/Marathi packs and the service worker. Each loads when
+(25 KB), QR renderer (8 KB), Sentry, Hindi/Kannada packs and the service worker. Each loads when
 first needed or is prefetched on idle when `saveData` is off.
 
 ## Options

@@ -24,7 +24,7 @@ export const hi: Record<Key, string> = {
   'lang.label': 'भाषा',
   'lang.en': 'English',
   'lang.hi': 'हिन्दी',
-  'lang.mr': 'मराठी',
+  'lang.kn': 'ಕನ್ನಡ',
   'common.retry': 'फिर से कोशिश करें',
   'common.back': 'वापस',
   'common.cancel': 'रद्द करें',

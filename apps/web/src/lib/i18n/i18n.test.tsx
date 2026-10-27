@@ -14,16 +14,16 @@ import {
   loadDict,
   useI18n,
 } from './index.ts';
-import { mr } from './mr.ts';
+import { kn } from './kn.ts';
 
 const placeholders = (s: string): string[] =>
   [...s.matchAll(/\{(\w+)\}/g)].map((m) => m[1] ?? '').sort();
 
 describe('dictionaries (§16.6)', () => {
-  it('Hindi and Marathi have every key with the same placeholders', () => {
+  it('Hindi and Kannada have every key with the same placeholders', () => {
     for (const [name, dict] of [
       ['hi', hi],
-      ['mr', mr],
+      ['kn', kn],
     ] as const) {
       expect(Object.keys(dict).sort(), name).toEqual(Object.keys(en).sort());
       for (const [k, val] of Object.entries(en)) {
@@ -42,7 +42,7 @@ describe('dictionaries (§16.6)', () => {
     ] as const) {
       expect(en[k]).toMatch(/Do NOT pay/);
       expect(hi[k]).toMatch(/भुगतान न करें/);
-      expect(mr[k]).toMatch(/पैसे देऊ नका/);
+      expect(kn[k]).toMatch(/ಹಣ ಕೊಡಬೇಡಿ/);
     }
   });
 });
@@ -57,9 +57,9 @@ describe('i18n helpers', () => {
 
   it('initialLang: saved choice, browser language, storage failures', () => {
     const mk = (saved: string | null) => ({ getItem: () => saved });
-    expect(initialLang(mk('mr'), { language: 'en-US' } as Navigator)).toBe('mr');
+    expect(initialLang(mk('kn'), { language: 'en-US' } as Navigator)).toBe('kn');
     expect(initialLang(mk(null), { language: 'hi-IN' } as Navigator)).toBe('hi');
-    expect(initialLang(mk('xx'), { language: 'mr-IN' } as Navigator)).toBe('mr');
+    expect(initialLang(mk('xx'), { language: 'kn-IN' } as Navigator)).toBe('kn');
     expect(initialLang(mk(null), { language: 'en-GB' } as Navigator)).toBe('en');
     expect(
       initialLang(
@@ -86,7 +86,7 @@ describe('i18n helpers', () => {
 
   it('loads language packs', async () => {
     expect((await loadDict('hi'))['home.scan']).toBe(hi['home.scan']);
-    expect((await loadDict('mr'))['home.scan']).toBe(mr['home.scan']);
+    expect((await loadDict('kn'))['home.scan']).toBe(kn['home.scan']);
     expect(await loadDict('en')).toBe(en);
   });
 });
@@ -103,7 +103,7 @@ describe('I18nProvider', () => {
         <button
           type="button"
           onClick={() => {
-            i.setLang('mr');
+            i.setLang('kn');
           }}
         >
           {'switch'}
@@ -124,10 +124,10 @@ describe('I18nProvider', () => {
       screen.getByRole('button').click();
     });
     await waitFor(() => {
-      expect(screen.getByText(mr['home.scan'])).toBeInTheDocument();
+      expect(screen.getByText(kn['home.scan'])).toBeInTheDocument();
     });
-    expect(localStorage.getItem('24m.lang')).toBe('mr');
-    expect(document.documentElement.lang).toBe('mr');
+    expect(localStorage.getItem('24m.lang')).toBe('kn');
+    expect(document.documentElement.lang).toBe('kn');
   });
 
   it('survives storage that throws', async () => {
@@ -144,7 +144,7 @@ describe('I18nProvider', () => {
         screen.getByRole('button').click();
       });
       await waitFor(() => {
-        expect(screen.getByText(mr['home.scan'])).toBeInTheDocument();
+        expect(screen.getByText(kn['home.scan'])).toBeInTheDocument();
       });
     } finally {
       spy.mockRestore();

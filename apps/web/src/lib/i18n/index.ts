@@ -12,15 +12,15 @@ import {
 
 import { en, type Key } from './en.ts';
 
-export type Lang = 'en' | 'hi' | 'mr';
-export const LANGS: readonly Lang[] = ['en', 'hi', 'mr'];
+export type Lang = 'en' | 'hi' | 'kn';
+export const LANGS: readonly Lang[] = ['en', 'hi', 'kn'];
 const LANG_KEY = '24m.lang';
 type Dict = Record<Key, string>;
 
 /** Language packs other than English are separate chunks loaded on demand (§3.1 i18n). */
 export function loadDict(lang: Lang): Promise<Dict> {
   if (lang === 'hi') return import('./hi.ts').then((m) => m.hi);
-  if (lang === 'mr') return import('./mr.ts').then((m) => m.mr);
+  if (lang === 'kn') return import('./kn.ts').then((m) => m.kn);
   return Promise.resolve(en);
 }
 
@@ -41,9 +41,9 @@ export function initialLang(
   } catch {
     saved = null;
   }
-  if (saved === 'en' || saved === 'hi' || saved === 'mr') return saved;
+  if (saved === 'en' || saved === 'hi' || saved === 'kn') return saved;
   const pref = nav.language.toLowerCase();
-  return pref.startsWith('mr') ? 'mr' : pref.startsWith('hi') ? 'hi' : 'en';
+  return pref.startsWith('kn') ? 'kn' : pref.startsWith('hi') ? 'hi' : 'en';
 }
 
 const IST = 'Asia/Kolkata';
