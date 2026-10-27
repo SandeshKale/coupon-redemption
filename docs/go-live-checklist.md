@@ -302,3 +302,56 @@ It must end with `smoke OK`. Then on a phone:
    the coupon stays valid. Scan it again and tap **Paid**: the receipt shows ₹100 and no QR code.
 
 Send me any step that does not behave as written, with a screenshot, and I will take it from there.
+
+---
+
+## Reference: how the app works
+
+### Who does what
+
+| Role         | Signs in with                            | Can do                                                                                                                                      |
+| ------------ | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| 24M Admin    | Work email, two-step verification        | Masters (SKUs, distributors, dealers), lots and activation, holds and reversals, first check of distributor claims, weekly review, settings |
+| 24M Finance  | Work email, two-step verification        | Settle a validated claim with the 24M credit note number, read reports and the settlement export                                            |
+| 24M Viewer   | Work email, two-step verification        | Read-only reports and lookups                                                                                                               |
+| Distributor  | One-time login link from the admin       | Register own dealers, create dealer logins, send login links, approve or reject dealer claims, raise one claim to 24M                       |
+| Dealer owner | One-time login link from the distributor | Scan, pay or decline, submit the monthly claim, request staff logins                                                                        |
+| Dealer staff | One-time login link from the distributor | Scan, pay or decline                                                                                                                        |
+
+There are no usernames or passwords. Every person signs in through a link tied to their mobile number
+(24M staff through their email).
+
+### Login chain: 24M, distributor, dealer
+
+1. The admin signs in (step A5), adds SKUs, then the distributor.
+2. The admin presses **Send login link** for the distributor. WhatsApp opens on the admin's phone with
+   a ready message. The admin sends it. The link works once and lasts 24 hours.
+3. The distributor adds each dealer (dealer code, shop name, owner's mobile) or uploads a CSV, then
+   creates the owner's login.
+4. The distributor presses **Send login link** for the dealer and sends the WhatsApp message.
+5. The dealer taps the link and lands on Home, signed in. The phone stays signed in.
+6. If a link expired, the dealer taps **Request new login link** on the login page and enters their
+   registered mobile. The distributor sees the request and sends a new link.
+
+Nothing is sent automatically. A person sends each link from their own WhatsApp.
+
+### Dealer flow
+
+1. Scan the QR with the normal phone camera. It opens `https://m24-coupon.vercel.app/c/<code>`.
+2. A signed-in dealer sees the coupon and two buttons: **Paid ₹100 to painter** and **Declined to pay**.
+3. **Paid** records the payment and adds it to the dealer's claim. **Declined** only records the choice;
+   the coupon stays valid.
+4. Not signed in: the page shows "Genuine 24M coupon" and a dealer log-in link, with no buttons.
+5. The dealer must be signed in on the same browser the camera opens (Chrome is safest).
+
+### Coupon lifecycle
+
+Loaded (`GENERATED`), then activated by the admin (`ACTIVE`), then paid (`REDEEMED`), then claimed by the
+dealer, approved by the distributor, validated by the admin, and settled by finance.
+
+### Where things are
+
+- Supabase project `cgkspifvzbyqcoamgafc`, Vercel project `coupon-redemption`.
+- Coupon address: `m24-coupon.vercel.app`. App address in the table at the top.
+- First lot: `LOT-001`, serials P24-0000001 to P24-0001000, ₹100 each, not yet activated.
+- Painter WhatsApp confirmation is off (ADR-0006).
