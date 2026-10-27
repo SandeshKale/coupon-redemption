@@ -48,7 +48,7 @@ select is(
     where n.nspname = 'public' and has_function_privilege('service_role', p.oid, 'execute')
       and not has_function_privilege('authenticated', p.oid, 'execute')),
   array['export_lot_page', 'finish_lot_export', 'job_cleanup', 'job_expire_coupons', 'job_expire_painter_tokens',
-        'job_submit_dealer_claims', 'record_login_link_issued', 'record_login_link_request', 'register_app_user',
+        'job_submit_dealer_claims', 'pin_login_check', 'record_login_link_issued', 'record_login_link_request', 'register_app_user',
         'run_reconciliation', 'set_app_user_email', 'wa_claim_outbox', 'wa_handle_inbound', 'wa_mark_failed',
         'wa_mark_sent', 'wa_record_error'],
   'service-role-only functions are exactly the Edge Function / job entry points');

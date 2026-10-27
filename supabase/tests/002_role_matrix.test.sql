@@ -63,7 +63,13 @@ insert into matrix values
   ($$public.set_config_value('nope', '1')$$, '{M24_ADMIN}'),
   ($$public.painter_detail(0)$$, '{M24_ADMIN}'),
   ($$public.set_painter_status(0, 'OK', 'note')$$, '{M24_ADMIN}'),
-  ($$(select count(*) from public.recon_summary(current_date))$$, '{M24_ADMIN,M24_FINANCE,M24_VIEWER,DISTRIBUTOR}');
+  ($$(select count(*) from public.recon_summary(current_date))$$, '{M24_ADMIN,M24_FINANCE,M24_VIEWER,DISTRIBUTOR}'),
+  ($$public.set_user_pin(0, '2468')$$, '{M24_ADMIN,DISTRIBUTOR}'),
+  ($$public.change_my_pin('0000', '2468')$$, '{DEALER_OWNER,DEALER_STAFF,DISTRIBUTOR}'),
+  ($$public.validate_coupon('x')$$, '{DEALER_OWNER,DEALER_STAFF}'),
+  ($$public.my_validations(1, null)$$, '{DEALER_OWNER,DEALER_STAFF}'),
+  ($$public.coupon_stats()$$, '{M24_ADMIN,M24_FINANCE,M24_VIEWER}'),
+  ($$public.list_dealers(null)$$, '{M24_ADMIN,M24_FINANCE,M24_VIEWER,DISTRIBUTOR}');
 
 create temp table who (label text, role text);
 insert into who values ('Owner A', 'DEALER_OWNER'), ('Staff A', 'DEALER_STAFF'), ('Distributor Pune', 'DISTRIBUTOR'),
