@@ -50,7 +50,7 @@ function RequestLink(): ReactNode {
             );
           })
           .catch(() => {
-            setMsg(i.t('state.offline'));
+            setMsg(i.t('auth.requestFailed'));
           });
       }}
     >

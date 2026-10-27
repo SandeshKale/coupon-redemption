@@ -44,7 +44,9 @@ describe('LoginPage', () => {
     expect(await screen.findByText('Too many requests. Try again in an hour.')).toBeInTheDocument();
     server.use(http.post(`${API}/functions/v1/login-link-request`, () => HttpResponse.error()));
     await userEvent.click(screen.getByRole('button', { name: 'Request new login link' }));
-    expect(await screen.findByText('No internet. Don’t pay yet.')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Could not send your request. Check your internet and try again.'),
+    ).toBeInTheDocument();
     server.use(
       http.post(`${API}/functions/v1/login-link-request`, () =>
         HttpResponse.json({}, { status: 500 }),

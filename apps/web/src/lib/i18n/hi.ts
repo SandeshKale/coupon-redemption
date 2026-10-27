@@ -81,6 +81,7 @@ export const hi: Record<Key, string> = {
   'auth.required': 'रिडीम करने के लिए लॉग इन करें',
   'auth.requestLink': 'नया लॉगिन लिंक माँगें',
   'auth.requestSent': 'अनुरोध भेज दिया। आपका डिस्ट्रीब्यूटर WhatsApp पर नया लिंक भेजेगा।',
+  'auth.requestFailed': 'आपका अनुरोध नहीं भेजा जा सका। इंटरनेट जाँचें और फिर कोशिश करें।',
   'auth.mobile': 'आपका मोबाइल नंबर',
   'auth.openInChrome': 'अगर यह किसी दूसरे ऐप में खुला है, तो लिंक Chrome में खोलें।',
   'auth.callback': 'लॉग इन हो रहा है…',

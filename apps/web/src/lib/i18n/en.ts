@@ -79,6 +79,7 @@ export const en = {
   'auth.required': 'Log in to redeem',
   'auth.requestLink': 'Request new login link',
   'auth.requestSent': 'Request sent. Your distributor will send a new link on WhatsApp.',
+  'auth.requestFailed': 'Could not send your request. Check your internet and try again.',
   'auth.mobile': 'Your mobile number',
   'auth.openInChrome': 'If this opened inside another app, open the link in Chrome.',
   'auth.callback': 'Logging you in…',
