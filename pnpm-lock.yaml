@@ -111,12 +111,6 @@ importers:
         specifier: 7.4.1
         version: 7.4.1
     devDependencies:
-      '@axe-core/playwright':
-        specifier: 4.13.0
-        version: 4.13.0(playwright-core@1.63.0)
-      '@playwright/test':
-        specifier: 1.63.0
-        version: 1.63.0
       '@size-limit/preset-app':
         specifier: 11.2.0
         version: 11.2.0(size-limit@11.2.0)
@@ -174,6 +168,18 @@ importers:
       vitest:
         specifier: 3.2.7
         version: 3.2.7(@types/debug@4.1.13)(@types/node@22.15.30)(jiti@2.7.0)(jsdom@26.1.0)(lightningcss@1.32.0)(msw@2.15.0(@types/node@22.15.30)(typescript@5.9.3))(terser@5.51.2)(yaml@2.9.1)
+
+  e2e:
+    devDependencies:
+      '@axe-core/playwright':
+        specifier: 4.13.0
+        version: 4.13.0(playwright-core@1.63.0)
+      '@playwright/test':
+        specifier: 1.63.0
+        version: 1.63.0
+      '@types/node':
+        specifier: 22.15.30
+        version: 22.15.30
 
   packages/shared:
     devDependencies:

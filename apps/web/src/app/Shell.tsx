@@ -24,11 +24,11 @@ export function Shell({ helpline }: { readonly helpline: string | null }): React
           {t('nav.skip')}
         </a>
       ) : null}
-      <header className="flex items-center justify-between gap-2 py-3">
+      <header className="flex flex-wrap items-center justify-between gap-2 py-3">
         <Link to="/" className="text-xl font-bold">
           {t('app.name')}
         </Link>
-        <span className="flex items-center gap-3">
+        <span className="flex flex-wrap items-center gap-3">
           <LanguageSwitch />
           <HelpLink phone={helpline} />
         </span>

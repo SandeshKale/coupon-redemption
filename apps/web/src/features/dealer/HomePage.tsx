@@ -77,19 +77,19 @@ export function HomePage({ userRole }: { readonly userRole: string }): ReactNode
           <Skeleton lines={2} />
         )
       ) : (
-        <section className="grid grid-cols-2 gap-3">
+        <section className="grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-3">
           <Totals label={i.t('home.today')} count={home.today_count} paise={home.today_paise} />
           <Totals label={i.t('home.month')} count={home.month_count} paise={home.month_paise} />
           {home.pending_painter > 0 ? (
             <Link
               to="/history"
-              className="col-span-2 font-semibold text-warning-ink underline underline-offset-4"
+              className="col-span-full font-semibold text-warning-ink underline underline-offset-4"
             >
               {i.t('home.pendingPainter', { count: home.pending_painter })}
             </Link>
           ) : null}
           {stale ? (
-            <p className="col-span-2 text-sm text-muted">
+            <p className="col-span-full text-sm text-muted">
               {i.t('common.lastUpdated', { time: i.dateTime(home.as_of) })}
             </p>
           ) : null}
@@ -142,7 +142,7 @@ function Totals({
 }): ReactNode {
   const { t } = useI18n();
   return (
-    <div className="rounded-card bg-surface-2 p-4">
+    <div className="min-w-0 rounded-card bg-surface-2 p-4 break-words">
       <h2 className="text-muted">{label}</h2>
       <p className="text-2xl font-bold">
         <Money paise={paise} />

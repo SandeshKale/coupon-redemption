@@ -13,3 +13,4 @@ test-results/
 supabase/.temp/
 supabase/.branches/
 .lighthouseci/
+test-results/
