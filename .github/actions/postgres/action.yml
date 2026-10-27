@@ -1,0 +1,22 @@
+name: Postgres 17 + pgTAP
+description: >-
+  PostgreSQL 17 (same major as Supabase) from PGDG with pgTAP, plpgsql_check and pg_prove.
+  Exports PGHOST/PGPORT so scripts/db-test.sh connects as the runner (superuser).
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        sudo apt-get update -qq
+        sudo apt-get install -y -qq postgresql-common
+        sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+        sudo apt-get install -y -qq postgresql-17 postgresql-client-17 postgresql-17-pgtap \
+          postgresql-17-plpgsql-check libtap-parser-sourcehandler-pgtap-perl
+        sudo pg_ctlcluster 17 main start
+        port=$(pg_lsclusters -h | awk '$1 == "17" { print $3 }')
+        sudo -u postgres psql -p "$port" -c "create role $USER superuser login"
+        {
+          echo "PGHOST=/var/run/postgresql"
+          echo "PGPORT=$port"
+          echo "PATH=/usr/lib/postgresql/17/bin:$PATH"
+        } >> "$GITHUB_ENV"

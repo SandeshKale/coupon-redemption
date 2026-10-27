@@ -1,0 +1,178 @@
+# Per-PR quality gates (§20.9). A PR merges only when every job here is green.
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DENO_VERSION: 2.9.6
+  SQLFLUFF_VERSION: 3.4.2
+  GITLEAKS_VERSION: 8.28.0
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: ${{ env.DENO_VERSION }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install "sqlfluff==${SQLFLUFF_VERSION}"
+      - name: ESLint, Stylelint, markdownlint, Prettier
+        run: pnpm lint
+      - name: sqlfluff
+        run: pnpm lint:sql
+      - name: deno lint / fmt
+        run: cd supabase/functions && deno lint && deno fmt --check
+      - name: knip (unused files, exports, dependencies)
+        run: pnpm knip
+      - name: Shared code drift (packages/shared → supabase/functions/_shared/lib, Luhn vectors)
+        run: |
+          pnpm sync:shared
+          pnpm --filter @24m/shared vectors
+          git diff --exit-code
+      - name: commitlint
+        if: github.event_name == 'pull_request'
+        run: >-
+          pnpm exec commitlint --from ${{ github.event.pull_request.base.sha }}
+          --to ${{ github.event.pull_request.head.sha }} --verbose
+      - name: gitleaks
+        run: >-
+          docker run --rm -v "$PWD:/repo" -w /repo
+          "zricethezav/gitleaks:v${GITLEAKS_VERSION}" git --redact --verbose /repo
+
+  typecheck:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: ${{ env.DENO_VERSION }}
+      - run: pnpm typecheck
+      - name: deno check
+        run: cd supabase/functions && deno check */index.ts
+
+  unit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - name: Vitest with coverage thresholds (shared 100%, web lib 95%, web ui/features 90/85)
+        run: pnpm test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-unit
+          path: |
+            packages/shared/coverage
+            apps/web/coverage
+          retention-days: 7
+
+  deno:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: ${{ env.DENO_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - name: Deno tests with coverage gate (95 / 90 / 95)
+        run: |
+          cd supabase/functions
+          rm -rf ../../coverage/deno
+          deno test --allow-read --allow-env --coverage=../../coverage/deno
+          deno coverage ../../coverage/deno --lcov --output=../../coverage/deno.lcov \
+            --exclude='_test\.ts$|test_util\.ts$|/lib/|index\.ts$|deps\.ts$'
+          node ../../scripts/coverage-gate.mjs ../../coverage/deno.lcov 95 90 95
+
+  db:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/postgres
+      - name: Migrations from zero → plpgsql_check → pgTAP → meta-test
+        run: bash scripts/db-test.sh && bash scripts/db-meta-test.sh
+
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      VITE_SUPABASE_URL: https://staging.supabase.example
+      VITE_SUPABASE_ANON_KEY: ci-placeholder
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - run: pnpm build
+      - name: size-limit budgets (§18.1)
+        run: pnpm size
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: apps/web/dist
+          retention-days: 7
+
+  lighthouse:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: apps/web/dist
+      - name: Lighthouse CI (mobile, slow 4G; perf ≥ 90, LCP ≤ 2.5 s, TBT ≤ 200 ms, CLS ≤ 0.05)
+        run: npx --yes @lhci/cli@0.15.1 autorun
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lighthouse
+          path: .lighthouseci
+          retention-days: 7
+
+  e2e:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      E2E_ALL_ENGINES: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - name: Install Playwright browsers (Chromium, WebKit, Firefox)
+        run: pnpm --filter @24m/e2e exec playwright install --with-deps chromium webkit firefox
+      - name: Journeys, axe, 4G / slow 4G / 3G profiles
+        run: pnpm test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            playwright-report
+            e2e/test-results
+          retention-days: 7

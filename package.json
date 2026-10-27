@@ -16,7 +16,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "tsc -p packages/shared && pnpm --filter @24m/web typecheck && tsc -p e2e",
-    "test": "pnpm -r --if-present test",
+    "test": "pnpm -r --filter '!@24m/e2e' --if-present test",
     "test:shared": "pnpm --filter @24m/shared test",
     "test:web": "pnpm --filter @24m/web test",
     "test:deno": "cd supabase/functions && rm -rf ../../coverage/deno && deno test --allow-read --allow-env --coverage=../../coverage/deno && deno coverage ../../coverage/deno --lcov --output=../../coverage/deno.lcov --exclude='_test\\.ts$|test_util\\.ts$|/lib/|index\\.ts$|deps\\.ts$' && node ../../scripts/coverage-gate.mjs ../../coverage/deno.lcov 95 90 95",
@@ -44,7 +44,7 @@
     "globals": "16.5.0",
     "knip": "5.88.1",
     "lefthook": "1.13.6",
-    "markdownlint-cli2": "0.18.1",
+    "markdownlint-cli2": "0.24.0",
     "prettier": "3.9.10",
     "stylelint": "16.26.1",
     "stylelint-config-standard": "38.0.0",
@@ -56,6 +56,9 @@
     "onlyBuiltDependencies": [
       "lefthook",
       "esbuild"
-    ]
+    ],
+    "overrides": {
+      "tinypool": "2.1.2"
+    }
   }
 }

@@ -179,12 +179,16 @@ Deno.test('readEnv reads Deno.env by default', () => {
 });
 
 Deno.test('default log sink writes one JSON line', () => {
+  // The log sink is console.log; swap it to capture the line.
+  // deno-lint-ignore no-console
   const original = console.log;
   const lines: unknown[] = [];
+  // deno-lint-ignore no-console
   console.log = (...args: unknown[]) => void lines.push(args[0]);
   try {
     makeLogger('fn', 'r').log('info', 'ok');
   } finally {
+    // deno-lint-ignore no-console
     console.log = original;
   }
   assertEquals(JSON.parse(String(lines[0])).outcome, 'ok');

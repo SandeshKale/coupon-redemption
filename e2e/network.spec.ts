@@ -7,6 +7,10 @@ import { type Profile, throttle } from './support/network.ts';
 const TARGET_MS: Record<Profile, number> = { '4g': 1000, 'slow-4g': 1500, '3g': 3000, '2g': 6000 };
 const nightlyOnly = new Set<Profile>(['2g']);
 
+test.beforeEach(({ browserName }) => {
+  test.skip(browserName !== 'chromium', 'CDP network throttling is Chromium-only');
+});
+
 for (const profile of Object.keys(TARGET_MS) as Profile[]) {
   test(`§18.5 ${profile}: scan → result and confirm → receipt within ${TARGET_MS[profile]} ms`, async ({
     page,

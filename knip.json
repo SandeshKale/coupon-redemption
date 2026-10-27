@@ -1,0 +1,25 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "ignoreExportsUsedInFile": true,
+  "workspaces": {
+    ".": {
+      "entry": ["scripts/*.mjs", "load/*.js", "load/*.mjs"],
+      "ignoreBinaries": ["sqlfluff"],
+      "ignoreDependencies": ["k6"]
+    },
+    "apps/web": {
+      "entry": ["src/**/*.test.{ts,tsx}", "src/test/**/*.{ts,tsx}"],
+      "project": ["src/**/*.{ts,tsx}"],
+      "ignoreDependencies": ["tailwindcss"]
+    },
+    "packages/shared": {
+      "entry": ["src/**/*.test.ts", "scripts/*.ts"],
+      "project": ["src/**/*.ts", "scripts/*.ts"]
+    },
+    "e2e": {
+      "entry": ["*.spec.ts"],
+      "project": ["**/*.ts"]
+    }
+  },
+  "ignore": ["supabase/functions/**"]
+}

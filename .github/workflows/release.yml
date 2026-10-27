@@ -1,0 +1,35 @@
+# Release (§24): tag vX.Y.Z → every per-PR gate + security + k6 on staging → staging deploy →
+# production deploy (manual approval on the production environment) → smoke test.
+name: Release
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: read
+
+jobs:
+  gates:
+    uses: ./.github/workflows/ci.yml
+
+  security:
+    uses: ./.github/workflows/security.yml
+
+  staging:
+    needs: [gates, security]
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: staging
+    secrets: inherit
+
+  load:
+    needs: staging
+    uses: ./.github/workflows/load.yml
+    secrets: inherit
+
+  production:
+    needs: load
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: production
+    secrets: inherit

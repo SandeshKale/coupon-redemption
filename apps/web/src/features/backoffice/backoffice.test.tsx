@@ -7,7 +7,7 @@ import { PROFILE } from '../../test/fixtures.ts';
 import { renderAt, signIn } from '../../test/render.tsx';
 import { API, err, rest, rpc, server } from '../../test/server.ts';
 
-import { BackOffice } from './BackOffice.tsx';
+import BackOffice from './BackOffice.tsx';
 import { failureText, num, str, summarise } from './data.ts';
 
 const profile = (role: string) => PROFILE(role)[0] as never;

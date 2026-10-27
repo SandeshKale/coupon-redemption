@@ -1,0 +1,33 @@
+# k6 release gate (§20.7) against STAGING with 5 lakh seeded coupons. Never targets production.
+name: Load
+on:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  k6:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    environment: staging
+    env:
+      STAGING_DB_URL: ${{ secrets.STAGING_DB_URL }}
+      K6_API_URL: https://${{ vars.SUPABASE_PROJECT_REF }}.supabase.co
+      K6_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
+      K6_JWT_SECRET: ${{ secrets.STAGING_JWT_SECRET }}
+      K6_WA_APP_SECRET: ${{ secrets.META_APP_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - uses: grafana/setup-k6-action@v1
+      - name: Guard — staging only
+        run: |
+          [ "${{ vars.SUPABASE_PROJECT_REF }}" != "${{ vars.PRODUCTION_PROJECT_REF }}" ] || {
+            echo "refusing to load-test production" >&2; exit 1; }
+      - run: sudo apt-get install -y -qq postgresql-client
+      - name: Same-code race, 300/min for 15 min, webhook burst, month-end cron
+        run: bash load/run.sh

@@ -12,6 +12,8 @@ create schema if not exists auth;
 create table if not exists auth.users (
   id uuid primary key,
   email text,
+  aud text,
+  role text,
   banned_until timestamptz
 );
 create or replace function auth.jwt() returns jsonb language sql stable as $$

@@ -16,7 +16,7 @@ export default tseslint.config(
       '**/node_modules/**',
       '**/.stryker-tmp/**',
       'supabase/**',
-      'load/**',
+      'load/.out/**',
       'reports/**',
       'playwright-report/**',
       '**/*.config.js',
@@ -107,6 +107,35 @@ export default tseslint.config(
       'security/detect-non-literal-fs-filename': 'off',
       'security/detect-object-injection': 'off',
       'security/detect-non-literal-regexp': 'off',
+    },
+  },
+  {
+    // k6 load scripts run in k6's JS runtime (goja), not Node: k6 globals, k6/* built-in modules.
+    files: ['load/**/*.js'],
+    ...tseslint.configs.disableTypeChecked,
+    languageOptions: {
+      ...tseslint.configs.disableTypeChecked.languageOptions,
+      globals: { __ENV: 'readonly', __VU: 'readonly', __ITER: 'readonly', open: 'readonly' },
+    },
+    settings: {
+      'import-x/core-modules': ['k6', 'k6/http', 'k6/crypto', 'k6/metrics', 'k6/execution'],
+    },
+    rules: {
+      ...tseslint.configs.disableTypeChecked.rules,
+      'security/detect-object-injection': 'off',
+    },
+  },
+  {
+    files: ['load/**/*.mjs'],
+    ...tseslint.configs.disableTypeChecked,
+    languageOptions: {
+      ...tseslint.configs.disableTypeChecked.languageOptions,
+      globals: { ...globals.node },
+    },
+    rules: {
+      ...tseslint.configs.disableTypeChecked.rules,
+      'no-console': 'off',
+      'security/detect-non-literal-fs-filename': 'off',
     },
   },
   {

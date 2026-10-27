@@ -33,5 +33,12 @@ export default defineConfig({
     { name: 'pixel5', use: { ...devices['Pixel 5'] } },
     { name: 'iphone13', use: { ...devices['iPhone 13'], browserName: 'chromium' } },
     { name: 'desktop', use: { ...devices['Desktop Chrome'] } },
+    // §20.1: three engines in CI. Locally only the pre-installed Chromium is assumed.
+    ...(process.env['E2E_ALL_ENGINES'] === undefined
+      ? []
+      : [
+          { name: 'iphone13-webkit', use: { ...devices['iPhone 13'] } },
+          { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
+        ]),
   ],
 });

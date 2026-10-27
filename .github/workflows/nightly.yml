@@ -1,0 +1,48 @@
+# Nightly gates (§20.9): 2G + flaky network profiles and mutation testing. Releases need these green.
+name: Nightly
+on:
+  schedule:
+    - cron: '30 20 * * *' # 02:00 IST
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  e2e-network:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      E2E_NIGHTLY: '1'
+      E2E_ALL_ENGINES: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - run: pnpm --filter @24m/e2e exec playwright install --with-deps chromium webkit firefox
+      - name: Full journey matrix with 4G, 3G, 2G and flaky profiles
+        run: pnpm test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report-nightly
+          path: playwright-report
+          retention-days: 14
+
+  mutation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        # Thresholds live in each stryker.config.json: shared ≥ 90, web lib ≥ 80 (§20.2).
+        package: ['@24m/shared', '@24m/web']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - run: pnpm --filter "${{ matrix.package }}" mutation
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mutation-${{ strategy.job-index }}
+          path: '**/reports/mutation'
+          retention-days: 14

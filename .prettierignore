@@ -10,3 +10,4 @@ supabase/seed.sql
 .stryker-tmp
 playwright-report
 test-results
+load/.out

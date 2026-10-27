@@ -26,7 +26,7 @@ import {
 } from './m24.tsx';
 
 /** Distributor and 24M back-office: one lazy chunk (TanStack Query lives only here). */
-export function BackOffice({ profile }: { readonly profile: Profile }): ReactNode {
+function BackOffice({ profile }: { readonly profile: Profile }): ReactNode {
   const [client] = useState(
     () =>
       new QueryClient({

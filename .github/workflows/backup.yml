@@ -1,0 +1,76 @@
+# Weekly encrypted logical backup to Cloudflare R2 (§20.9, §24) and a monthly restore drill.
+# A failure of either job alerts via GitHub's failed-workflow notification (§25).
+name: Backup
+on:
+  schedule:
+    - cron: '30 21 * * 6' # Sunday 03:00 IST
+    - cron: '30 22 1 * *' # 1st of the month 04:00 IST — restore drill
+  workflow_dispatch:
+    inputs:
+      restore_test:
+        description: Run the restore drill instead of a backup
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+env:
+  AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+  AWS_DEFAULT_REGION: auto
+  R2_ENDPOINT: https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
+  R2_BUCKET: ${{ vars.R2_BACKUP_BUCKET }}
+
+jobs:
+  backup:
+    if: github.event.schedule == '30 21 * * 6' || (github.event_name == 'workflow_dispatch' && !inputs.restore_test)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/postgres
+      - name: pg_dump → gpg (AES-256) → R2
+        env:
+          DB_URL: ${{ secrets.PRODUCTION_DB_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          name="coupon-$(date -u +%Y%m%dT%H%M%SZ).dump.gpg"
+          pg_dump --format=custom --no-owner --no-privileges "$DB_URL" \
+            | gpg --batch --yes --symmetric --cipher-algo AES256 --passphrase-fd 3 3<<<"$BACKUP_PASSPHRASE" \
+            > "$name"
+          test -s "$name"
+          aws s3 cp "$name" "s3://$R2_BUCKET/weekly/$name" --endpoint-url "$R2_ENDPOINT" --only-show-errors
+          echo "uploaded $name ($(stat -c %s "$name") bytes)"
+
+  restore-drill:
+    if: github.event.schedule == '30 22 1 * *' || (github.event_name == 'workflow_dispatch' && inputs.restore_test)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/postgres
+      - name: Latest backup → decrypt → restore into a scratch database → sanity checks
+        env:
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          latest=$(aws s3 ls "s3://$R2_BUCKET/weekly/" --endpoint-url "$R2_ENDPOINT" | sort | tail -n 1 | awk '{print $4}')
+          [ -n "$latest" ] || { echo "no backup found" >&2; exit 1; }
+          aws s3 cp "s3://$R2_BUCKET/weekly/$latest" backup.gpg --endpoint-url "$R2_ENDPOINT" --only-show-errors
+          gpg --batch --decrypt --passphrase-fd 3 3<<<"$BACKUP_PASSPHRASE" backup.gpg > backup.dump
+          createdb restore_drill
+          # Supabase-managed roles/schemas are stubbed by the test shim; app schemas restore on top.
+          psql -X -q -v ON_ERROR_STOP=1 -d restore_drill -f supabase/test-support/shim.sql \
+            -c "create schema if not exists extensions" -c "create schema if not exists private" \
+            -c "create extension if not exists pgcrypto with schema extensions"
+          pg_restore --exit-on-error --no-owner --no-privileges --schema=public --schema=private -d restore_drill backup.dump
+          psql -X -v ON_ERROR_STOP=1 -d restore_drill -c "
+            select (select count(*) from public.coupon) as coupons,
+                   (select count(*) from public.coupon_event) as events,
+                   (select count(*) from public.dealer) as dealers,
+                   (select max(at) from public.coupon_event) as last_event;"
+          echo "restore drill OK: $latest"

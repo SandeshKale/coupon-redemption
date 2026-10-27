@@ -27,7 +27,7 @@ for (let i = 0; i < 1000; i += 1) {
 const root = new URL('../../../', import.meta.url);
 writeFileSync(
   new URL('packages/shared/test-vectors/luhn32.json', root),
-  `${JSON.stringify(vectors, null, 1)}\n`,
+  `${JSON.stringify(vectors, null, 2)}\n`,
 );
 
 const values = vectors.map((v) => `  ('${v.payload}', '${v.check}')`).join(',\n');

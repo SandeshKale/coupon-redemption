@@ -108,7 +108,5 @@ export const Profile = v.array(
 );
 export type Profile = v.InferOutput<typeof Profile>[number];
 
-/** Generic JSON for back-office screens that render server data as tables. */
-export const AnyJson = v.unknown();
 export const JsonArray = v.array(v.record(v.string(), v.unknown()));
 export type Row = Record<string, unknown>;

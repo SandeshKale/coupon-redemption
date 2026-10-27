@@ -14,3 +14,4 @@ supabase/.temp/
 supabase/.branches/
 .lighthouseci/
 test-results/
+load/.out/

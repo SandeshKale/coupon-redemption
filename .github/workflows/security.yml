@@ -1,0 +1,40 @@
+# Weekly and pre-release security gates (§20.9): osv-scanner, pnpm audit, licence allow-list,
+# ZAP baseline against staging.
+name: Security
+on:
+  schedule:
+    - cron: '0 21 * * 0' # Monday 02:30 IST
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  dependencies:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - name: pnpm audit (high and critical fail)
+        run: pnpm audit --audit-level high
+      - name: osv-scanner (npm lockfile + Deno lockfile)
+        run: >-
+          docker run --rm -v "$PWD:/src" -w /src ghcr.io/google/osv-scanner:v2.2.2
+          scan source --lockfile pnpm-lock.yaml --lockfile supabase/functions/deno.lock
+      - name: Licence allow-list (production dependencies)
+        run: node scripts/licence-check.mjs
+
+  zap-baseline:
+    if: vars.STAGING_WEB_URL != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: zaproxy/action-baseline@v0.14.0
+        with:
+          target: ${{ vars.STAGING_WEB_URL }}
+          fail_action: true
+          allow_issue_writing: false
+          rules_file_name: .github/zap-rules.tsv

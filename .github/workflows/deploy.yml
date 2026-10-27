@@ -1,0 +1,81 @@
+# Deploys migrations, Edge Functions and the web app to one environment (§24), then smoke-tests it.
+# Production is a GitHub Environment with required reviewers: every production run waits for manual
+# approval. Secrets/vars are per environment; see docs/secrets.md for names and owners.
+name: Deploy
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        type: choice
+        options: [staging, production]
+        required: true
+  workflow_call:
+    inputs:
+      environment:
+        type: string
+        required: true
+    secrets:
+      SUPABASE_ACCESS_TOKEN:
+        required: true
+      SUPABASE_DB_PASSWORD:
+        required: true
+      CLOUDFLARE_API_TOKEN:
+        required: true
+      CLOUDFLARE_ACCOUNT_ID:
+        required: true
+      META_VERIFY_TOKEN:
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: ${{ inputs.environment }}
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Link project
+        run: supabase link --project-ref "$PROJECT_REF"
+      - name: Migrations (dry run, then apply; seed.sql is never pushed)
+        run: |
+          supabase db push --dry-run
+          supabase db push
+      - name: Edge Functions (verify_jwt per supabase/config.toml)
+        run: supabase functions deploy --project-ref "$PROJECT_REF"
+      - name: Build web app
+        env:
+          VITE_SUPABASE_URL: https://${{ vars.SUPABASE_PROJECT_REF }}.supabase.co
+          VITE_SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
+          VITE_COUPON_HOST: ${{ vars.COUPON_HOST }}
+          VITE_HELPLINE: ${{ vars.HELPLINE }}
+          VITE_SENTRY_DSN: ${{ vars.SENTRY_DSN }}
+        run: pnpm build && pnpm size
+      - name: Cloudflare Pages
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: >-
+          npx --yes wrangler@4 pages deploy apps/web/dist
+          --project-name "${{ vars.CF_PAGES_PROJECT }}" --branch main --commit-dirty=true
+      - name: Smoke test
+        env:
+          SMOKE_API_URL: https://${{ vars.SUPABASE_PROJECT_REF }}.supabase.co
+          SMOKE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
+          SMOKE_WEB_URL: ${{ vars.WEB_URL }}
+          SMOKE_WA_VERIFY_TOKEN: ${{ secrets.META_VERIFY_TOKEN }}
+        run: bash scripts/smoke.sh
