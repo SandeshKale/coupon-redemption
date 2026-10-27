@@ -16,17 +16,17 @@ to your own domain, repeat every step that mentions `APP_ADDRESS` with the new a
 
 ## Priority
 
-| #   | Step                              | Needed for                             | Time         |
-| --- | --------------------------------- | -------------------------------------- | ------------ |
-| A1  | Set the `APP_URL` secret          | Login links and every admin screen     | 1 min        |
-| A2  | Auth URL settings                 | Login links landing on the right site  | 2 min        |
-| A3  | Run the missing SQL               | Dealer reassignment and weekly cleanup | 2 min        |
-| A4  | Auth security settings            | Safe sign-in                           | 3 min        |
-| A5  | Create the first two 24M users    | Anyone being able to log in            | 10 min       |
-| B1  | Check the Vercel project settings | The app building correctly             | 3 min        |
-| B2  | Vercel plan: upgrade to Pro       | Allowed commercial use                 | 2 min        |
-| A6  | Set the helpline number           | The "Call 24M" link dealers see        | 1 min        |
-| B3  | Your own domains                  | Printed QR codes                       | when decided |
+| #   | Step                              | Needed for                             | Time   |
+| --- | --------------------------------- | -------------------------------------- | ------ |
+| A1  | Set the `APP_URL` secret          | Login links and every admin screen     | 1 min  |
+| A2  | Auth URL settings                 | Login links landing on the right site  | 2 min  |
+| A3  | Run the missing SQL               | Dealer reassignment and weekly cleanup | 2 min  |
+| A4  | Auth security settings            | Safe sign-in                           | 3 min  |
+| A5  | Create the first two 24M users    | Anyone being able to log in            | 10 min |
+| B1  | Check the Vercel project settings | The app building correctly             | 3 min  |
+| B2  | Vercel plan: upgrade to Pro       | Allowed commercial use                 | 2 min  |
+| A6  | Set the helpline number           | The "Call 24M" link dealers see        | 1 min  |
+| B3  | Your own domains (optional)       | A nicer address, not needed to scan    | later  |
 
 A1 to A5 and B1 get the app usable. A6 and B3 can wait, but read the warnings on them.
 
@@ -201,10 +201,19 @@ update public.app_config set value = '"+91 98XXXXXXXX"' where key = 'helpline';
 
 ### A7. Later: coupon domain and Mumbai (read before printing)
 
-- **Do not export or print a lot until the coupon domain is decided** (step B3). Every printed QR
-  contains it and cannot be changed afterwards.
-- When decided, add the Edge Function secret `COUPON_HOST` with the bare host, for example
-  `c.24m.in` (no `https://`).
+- **The coupon domain is decided: `m24-coupon.vercel.app`.** It is attached to the Vercel project and
+  the app is built to use it. The first 1000 coupons (serials P24-0000001 to P24-0001000, lot
+  `LOT-001`) are already loaded in Supabase. The label PDF with QR codes that open
+  `https://m24-coupon.vercel.app/c/<code>` is `m24-coupon-labels-1000.pdf`.
+- Add the Edge Function secret `COUPON_HOST` with the value `m24-coupon.vercel.app` (no `https://`).
+  It is used when an admin exports a lot. It is not needed for scanning.
+- The address ends in `vercel.app`, so it belongs to Vercel and your account. It keeps working while
+  the project exists. If you later buy a domain (step B3), add it to the same project: the printed
+  `m24-coupon.vercel.app` codes keep working next to it.
+- **Activate the coupons before the first real scan.** Until then a scan shows "not recognised".
+  As admin: add the SKU (for example code `PRIMER-1L`, name `24M Primer 1 L`), then **Lots**,
+  open `LOT-001`, **Activate range** from 1 to 1000 with a batch number and the manufacturing date.
+  Activate only the stock that is actually on the shelves.
 - The project is in Tokyo. For dealer data in India, create a new project in Mumbai before real
   use. This cannot be changed in place. Tell me and I will re-run all the migrations there.
 - The Free plan has no automatic backups. Move to **Pro** before real dealers use it.
@@ -226,13 +235,13 @@ Open <https://vercel.com/dashboard>, team "Sandesh Kale's projects", project `co
    - Node.js Version: **22.x**
 2. **Settings**, then **Environment Variables**. These must exist for **Production** (and Preview):
 
-   | Name                     | Value                                      | Status           |
-   | ------------------------ | ------------------------------------------ | ---------------- |
-   | `VITE_SUPABASE_URL`      | `https://cgkspifvzbyqcoamgafc.supabase.co` | already set      |
-   | `VITE_SUPABASE_ANON_KEY` | the project's public (anon) key            | already set      |
-   | `VITE_HELPLINE`          | for example `+91 98XXXXXXXX`               | **add**          |
-   | `VITE_COUPON_HOST`       | your coupon domain, such as `c.24m.in`     | add when decided |
-   | `VITE_SENTRY_DSN`        | from Sentry                                | optional         |
+   | Name                     | Value                                      | Status      |
+   | ------------------------ | ------------------------------------------ | ----------- |
+   | `VITE_SUPABASE_URL`      | `https://cgkspifvzbyqcoamgafc.supabase.co` | already set |
+   | `VITE_SUPABASE_ANON_KEY` | the project's public (anon) key            | already set |
+   | `VITE_HELPLINE`          | for example `+91 98XXXXXXXX`               | **add**     |
+   | `VITE_COUPON_HOST`       | `m24-coupon.vercel.app`                    | already set |
+   | `VITE_SENTRY_DSN`        | from Sentry                                | optional    |
 
    After adding or changing any `VITE_` variable you must **redeploy**, because these are baked in at
    build time. Go to **Deployments**, open the latest, click the **...** menu, then **Redeploy**.
@@ -246,9 +255,9 @@ Your team is on the free **Hobby** plan, which Vercel limits to **non-commercial
 business app with real dealers, switch to **Pro**: team **Settings**, then **Billing**, then
 **Upgrade to Pro**. Do this before real use.
 
-### B3. Your own domains (when decided)
+### B3. Your own domains (optional, later)
 
-Suggested: `app.YOURCOMPANY.com` for the app, and a short `c.YOURCOMPANY.com` for coupon QR codes.
+The coupons already work on `m24-coupon.vercel.app`. This step only adds a nicer address. Suggested: `app.YOURCOMPANY.com` for the app, and a short `c.YOURCOMPANY.com` for coupon QR codes.
 
 1. **Settings**, then **Domains**, then **Add**. Add both domains to this project.
 2. At your domain registrar, add the DNS record Vercel shows for each: usually a **CNAME** to
