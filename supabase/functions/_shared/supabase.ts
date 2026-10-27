@@ -14,6 +14,15 @@ export interface Supa {
   asUser<T>(jwt: string, fn: string, args: Record<string, unknown>): Promise<T>;
   /** GoTrue admin API (service role). */
   authAdmin<T>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: string, body?: unknown): Promise<T>;
+  /** Redeems a one-time token hash (from a generated magic link) for a session. */
+  authVerify(tokenHash: string): Promise<AuthSession>;
+}
+
+export interface AuthSession {
+  access_token: string;
+  refresh_token: string;
+  expires_in: number;
+  expires_at?: number;
 }
 
 export function makeSupa(env: Env, fetchImpl: typeof fetch, timeoutMs = 8000): Supa {
@@ -49,6 +58,12 @@ export function makeSupa(env: Env, fetchImpl: typeof fetch, timeoutMs = 8000): S
           'content-type': 'application/json',
         },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      }),
+    authVerify: (tokenHash) =>
+      call(`${env.supabaseUrl}/auth/v1/verify`, {
+        method: 'POST',
+        headers: { apikey: env.anonKey, 'content-type': 'application/json' },
+        body: JSON.stringify({ type: 'magiclink', token_hash: tokenHash }),
       }),
   };
 }

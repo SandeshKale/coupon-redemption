@@ -144,6 +144,10 @@ Deno.test('makeSupa calls PostgREST and GoTrue with the right keys and maps erro
   ]);
   await supa.authAdmin('GET', 'users');
   assertEquals(seen[2]?.url, 'https://proj.supabase.co/auth/v1/admin/users');
+  await supa.authVerify('hash-9');
+  assertEquals(seen[3]?.url, 'https://proj.supabase.co/auth/v1/verify');
+  assertEquals(seen[3]?.headers.get('apikey'), 'anon-key-test');
+  assertEquals(await seen[3]?.json(), { type: 'magiclink', token_hash: 'hash-9' });
   assertEquals(await supa.service('empty', {}), null);
   const err = await assertRejects(() => supa.asUser('j', 'bad', {}), ApiError);
   assertEquals([err.status, err.code, err.message], [403, 'PT403', 'FORBIDDEN']);

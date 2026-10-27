@@ -18,7 +18,13 @@ Deno.test('creates a dealer login: precheck as caller → auth user → app_user
   const res = await handler(
     post(
       U,
-      JSON.stringify({ name: 'Ravi', mobile: '98765 43210', role: 'DEALER_STAFF', dealer_id: 1 }),
+      JSON.stringify({
+        name: 'Ravi',
+        mobile: '98765 43210',
+        role: 'DEALER_STAFF',
+        dealer_id: 1,
+        pin: '4817',
+      }),
       AUTH,
     ),
     deps,
@@ -76,6 +82,21 @@ Deno.test('validation: unknown fields, bad mobile, dealer roles need a mobile', 
       .error,
     'MOBILE_REQUIRED',
   );
+  assertEquals(
+    (await (await handler(
+      post(U, JSON.stringify({ name: 'Ravi', role: 'DEALER_STAFF', mobile: '9876543210' }), AUTH),
+      d,
+    )).json()).error,
+    'PIN_REQUIRED',
+  );
+  assertEquals(
+    (await handler(
+      post(U, JSON.stringify({ name: 'Ravi', role: 'DEALER_STAFF', mobile: '9876543210', pin: '12' }), AUTH),
+      d,
+    )).status,
+    400,
+    'a PIN must be exactly four digits',
+  );
   assertEquals((await handler(post(U, 'not json', AUTH), d)).status, 400);
   assertEquals((await handler(new Request(U, { headers: AUTH }), d)).status, 405);
   assertEquals(d.calls.length, 0);
@@ -84,7 +105,11 @@ Deno.test('validation: unknown fields, bad mobile, dealer roles need a mobile', 
 Deno.test('EC-136 forbidden callers stop before any Auth user is created', async () => {
   const deps = testDeps({ rpc: { precheck_new_user: new ApiError(403, 'PT403', 'FORBIDDEN') } });
   const res = await handler(
-    post(U, JSON.stringify({ name: 'Ravi', mobile: '9876543210', role: 'DEALER_OWNER', dealer_id: 9 }), AUTH),
+    post(
+      U,
+      JSON.stringify({ name: 'Ravi', mobile: '9876543210', role: 'DEALER_OWNER', dealer_id: 9, pin: '4817' }),
+      AUTH,
+    ),
     deps,
   );
   assertEquals([res.status, (await res.json()).error], [403, 'FORBIDDEN']);
@@ -97,7 +122,11 @@ Deno.test('compensates: deletes the Auth user when app_user registration fails',
     auth: { ...okAuth, 'DELETE users/:id': {} },
   });
   const res = await handler(
-    post(U, JSON.stringify({ name: 'Ravi', mobile: '9876543210', role: 'DEALER_STAFF', dealer_id: 1 }), AUTH),
+    post(
+      U,
+      JSON.stringify({ name: 'Ravi', mobile: '9876543210', role: 'DEALER_STAFF', dealer_id: 1, pin: '4817' }),
+      AUTH,
+    ),
     deps,
   );
   assertEquals(res.status, 409);
@@ -110,7 +139,11 @@ Deno.test('a non-API registration failure still compensates and returns 500', as
     auth: { ...okAuth, 'DELETE users/:id': {} },
   });
   const res = await handler(
-    post(U, JSON.stringify({ name: 'Ravi', mobile: '9876543210', role: 'DEALER_STAFF', dealer_id: 1 }), AUTH),
+    post(
+      U,
+      JSON.stringify({ name: 'Ravi', mobile: '9876543210', role: 'DEALER_STAFF', dealer_id: 1, pin: '4817' }),
+      AUTH,
+    ),
     deps,
   );
   assertEquals(res.status, 500);
@@ -119,9 +152,78 @@ Deno.test('a non-API registration failure still compensates and returns 500', as
 Deno.test('internal email update is best effort', async () => {
   const deps = testDeps({ rpc: okRpc, auth: { ...okAuth, 'PUT users/:id': new Error('auth down') } });
   const res = await handler(
-    post(U, JSON.stringify({ name: 'Ravi', mobile: '9876543210', role: 'DEALER_STAFF', dealer_id: 1 }), AUTH),
+    post(
+      U,
+      JSON.stringify({ name: 'Ravi', mobile: '9876543210', role: 'DEALER_STAFF', dealer_id: 1, pin: '4817' }),
+      AUTH,
+    ),
     deps,
   );
   assertEquals(res.status, 201);
   assert(deps.logs.some((l) => l.includes('internal_email_not_set')));
+});
+
+Deno.test('a distributor adds a new dealer: PIN, GST and parent distributor reach the database', async () => {
+  const deps = testDeps({ rpc: okRpc, auth: okAuth });
+  const res = await handler(
+    post(
+      U,
+      JSON.stringify({
+        name: 'Om Paints',
+        mobile: '9822200001',
+        role: 'DEALER_OWNER',
+        parent_distributor_id: 1,
+        pin: '2468',
+        gst: ' 27aaapl1234c1z5 ',
+      }),
+      AUTH,
+    ),
+    deps,
+  );
+  assertEquals(res.status, 201);
+  const pre = deps.calls.find((c) => c.name === 'precheck_new_user')?.args as Record<string, unknown>;
+  assertEquals([pre['p_parent_distributor'], pre['p_is_rep'], pre['p_dealer_id']], [1, false, null]);
+  const reg = deps.calls.find((c) => c.name === 'register_app_user')?.args as Record<string, unknown>;
+  assertEquals(
+    [reg['p_pin'], reg['p_gst'], reg['p_parent_distributor_id'], reg['p_is_rep']],
+    ['2468', '27AAAPL1234C1Z5', 1, false],
+  );
+});
+
+Deno.test('24M adds a sales rep: the rep flag is passed on, and a bad GST is rejected', async () => {
+  const deps = testDeps({ rpc: okRpc, auth: okAuth });
+  const res = await handler(
+    post(
+      U,
+      JSON.stringify({
+        name: 'Rep One',
+        mobile: '9822200005',
+        role: 'DISTRIBUTOR',
+        distributor_id: 1,
+        is_rep: true,
+        pin: '8642',
+      }),
+      AUTH,
+    ),
+    deps,
+  );
+  assertEquals(res.status, 201);
+  const reg = deps.calls.find((c) => c.name === 'register_app_user')?.args as Record<string, unknown>;
+  assertEquals(reg['p_is_rep'], true);
+  const bad = await handler(
+    post(
+      U,
+      JSON.stringify({
+        name: 'Om',
+        mobile: '9822200001',
+        role: 'DEALER_OWNER',
+        parent_distributor_id: 1,
+        pin: '2468',
+        gst: 'nope',
+      }),
+      AUTH,
+    ),
+    testDeps(),
+  );
+  assertEquals(bad.status, 400);
 });

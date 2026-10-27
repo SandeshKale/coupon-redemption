@@ -1,6 +1,6 @@
 import type { Deps } from './deps.ts';
 import type { Env } from './env.ts';
-import type { Supa } from './supabase.ts';
+import type { AuthSession, Supa } from './supabase.ts';
 
 export const TEST_ENV: Env = {
   supabaseUrl: 'https://proj.supabase.co',
@@ -17,7 +17,7 @@ export const TEST_ENV: Env = {
 };
 
 export interface Call {
-  kind: 'service' | 'user' | 'auth' | 'fetch';
+  kind: 'service' | 'user' | 'auth' | 'verify' | 'fetch';
   name: string;
   args: unknown;
   jwt?: string;
@@ -70,6 +70,10 @@ export function testDeps(opts: {
       const key = `${method} ${path.replace(/\/[0-9a-f-]{36}$/, '/:id')}`;
       calls.push({ kind: 'auth', name: key, args: body });
       return respond(opts.auth, key, body) as Promise<T>;
+    },
+    authVerify: (tokenHash: string) => {
+      calls.push({ kind: 'verify', name: 'verify', args: tokenHash });
+      return respond(opts.auth, 'VERIFY', tokenHash) as Promise<AuthSession>;
     },
   };
   const fakeFetch = (input: string | URL | Request, init?: RequestInit): Promise<Response> => {

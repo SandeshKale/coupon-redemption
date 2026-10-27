@@ -9,8 +9,10 @@ interface AuthUser {
 }
 
 /**
- * §10.1: creates the Auth user (internal email, never emailed) and the app_user row.
- * Authorisation is decided by the database (precheck_new_user, under the caller's JWT).
+ * Creates the Auth user (internal email, never emailed) and the app_user row, with the 4-digit PIN
+ * the creator chose. For a new dealer (role DEALER_OWNER, no dealer_id) the dealer record is created
+ * in the same database step. Authorisation is decided by the database (precheck_new_user, under
+ * the caller's JWT).
  */
 export const handler = browserFunction(async (req, deps, jwt) => {
   if (req.method !== 'POST') return json(405, { error: 'method' });
@@ -21,6 +23,7 @@ export const handler = browserFunction(async (req, deps, jwt) => {
   if (input.mobile !== undefined && mobile === null) return json(400, { error: 'BAD_MOBILE' });
   if (!isM24 && mobile === null) return json(400, { error: 'MOBILE_REQUIRED' });
   if (isM24 && input.email === undefined) return json(400, { error: 'EMAIL_REQUIRED' });
+  if (!isM24 && input.pin === undefined) return json(400, { error: 'PIN_REQUIRED' });
 
   const pre = await deps.supa.asUser<{ created_by: number; email_domain: string }>(jwt, 'precheck_new_user', {
     p_name: input.name,
@@ -28,6 +31,8 @@ export const handler = browserFunction(async (req, deps, jwt) => {
     p_role: input.role,
     p_dealer_id: input.dealer_id ?? null,
     p_distributor_id: input.distributor_id ?? null,
+    p_parent_distributor: input.parent_distributor_id ?? null,
+    p_is_rep: input.is_rep ?? false,
   });
 
   const placeholder = `pending-${crypto.randomUUID()}@${pre.email_domain}`;
@@ -50,6 +55,10 @@ export const handler = browserFunction(async (req, deps, jwt) => {
       p_distributor_id: input.distributor_id ?? null,
       p_created_by: pre.created_by,
       p_request_id: input.request_id ?? null,
+      p_pin: input.pin ?? null,
+      p_is_rep: input.is_rep ?? false,
+      p_gst: input.gst ?? null,
+      p_parent_distributor_id: input.parent_distributor_id ?? null,
     });
   } catch (e) {
     // Compensate: never leave an Auth user without an app_user.
