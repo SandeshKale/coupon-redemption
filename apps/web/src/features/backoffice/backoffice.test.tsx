@@ -54,8 +54,6 @@ const LINES = [
     redeemed_at: '2026-10-20T10:00:00Z',
     coupon_status: 'REDEEMED',
     line_status: 'PENDING',
-    painter_status: 'CONFIRMED',
-    painter: '+91 98•••• 1111',
     failures: [],
   },
   {
@@ -66,8 +64,6 @@ const LINES = [
     redeemed_at: '2026-10-20T10:00:00Z',
     coupon_status: 'ON_HOLD',
     line_status: 'PENDING',
-    painter_status: 'DISPUTED',
-    painter: null,
     failures: ['R2-05'],
   },
   {
@@ -78,8 +74,6 @@ const LINES = [
     redeemed_at: '2026-10-20T10:00:00Z',
     coupon_status: 'REDEEMED',
     line_status: 'APPROVED',
-    painter_status: 'NONE',
-    painter: null,
     failures: [],
   },
 ];
@@ -116,7 +110,7 @@ describe('distributor', () => {
     expect(await screen.findByText('You do not have permission for this.')).toBeInTheDocument();
   });
 
-  it('claim detail: rule results and painter status per line, decisions, close with CN, notify dealer', async () => {
+  it('claim detail: rule results per line, decisions, close with CN, notify dealer', async () => {
     signIn();
     const decisions: unknown[] = [];
     rpc({
@@ -135,7 +129,6 @@ describe('distributor', () => {
     });
     open('DISTRIBUTOR', '/d/claim/7');
     expect(await screen.findByText('On hold at 24M')).toBeInTheDocument();
-    expect(screen.getByText(/✓ Confirmed/)).toBeInTheDocument();
     expect(screen.getByText('Total ₹100 for 1 coupons')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Approve all eligible' }));
     await userEvent.selectOptions(screen.getByLabelText('Choose a reason'), 'SUSPECTED_FRAUD');
@@ -310,32 +303,12 @@ describe('distributor', () => {
 });
 
 describe('24M', () => {
-  it('weekly review: disputes resolved, sections listed, review logged', async () => {
+  it('weekly review: sections listed, review logged', async () => {
     signIn('u', 'aal2');
-    rest({
-      v_disputes: [
-        {
-          batch_id: 9,
-          status: 'DISPUTED',
-          dealer_name: 'Shop',
-          coupon_count: 1,
-          painter: '+91 98•••• 1111',
-        },
-      ],
-      v_wa_health: [{ outbox_pending: 2 }],
-    });
-    const resolved: unknown[] = [];
-    rpc({ resolve_dispute: (a) => (resolved.push(a), { coupons: 1 }), log_weekly_review: 1 });
+    rpc({ log_weekly_review: 1 });
     open('M24_ADMIN', '/m');
-    await userEvent.click(await screen.findByRole('button', { name: 'Release' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Reject coupons' }));
-    await waitFor(() => {
-      expect(resolved).toEqual([
-        expect.objectContaining({ p_decision: 'RELEASE' }),
-        expect.objectContaining({ p_decision: 'REJECT' }),
-      ]);
-    });
-    expect(screen.getByRole('heading', { name: 'WhatsApp health' })).toBeInTheDocument();
+    expect(await screen.findByLabelText('Notes')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'WhatsApp health' })).not.toBeInTheDocument();
     await userEvent.type(screen.getByLabelText('Notes'), 'all good');
     await userEvent.click(screen.getByRole('button', { name: 'Mark weekly review done' }));
   });
@@ -409,7 +382,7 @@ describe('24M', () => {
     });
   });
 
-  it('lookup: history, masked painter, admin actions', async () => {
+  it('lookup: history, admin actions', async () => {
     signIn('u', 'aal2');
     const acts: string[] = [];
     rpc({
@@ -420,7 +393,6 @@ describe('24M', () => {
               found: true,
               coupon: { id: 11, serial: 'P24-0000001', status: 'REDEEMED', value_paise: 10000 },
               dealer: { name: 'Shop' },
-              painter: { status: 'CONFIRMED', painter: '+919811111111' },
               events: [
                 {
                   event: 'REDEEMED',
@@ -444,9 +416,6 @@ describe('24M', () => {
     await userEvent.type(screen.getByLabelText('Serial or code'), 'P24-0000001');
     await userEvent.click(screen.getByRole('button', { name: 'Search' }));
     expect(await screen.findByRole('heading', { name: 'P24-0000001' })).toBeInTheDocument();
-    expect(screen.queryByText('+919811111111')).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Show full number' }));
-    expect(screen.getByText('+919811111111')).toBeInTheDocument();
     for (const name of ['Hold', 'Release', 'Reverse redemption']) {
       const form = screen.getByRole('button', { name }).closest('form')!;
       await userEvent.type(within(form).getByRole('textbox'), 'checked with dealer');

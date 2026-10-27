@@ -67,10 +67,65 @@ describe('CouponPage (§4.1)', () => {
     expect(await screen.findByText('Valid coupon · ₹100')).toBeInTheDocument();
     expect(screen.getByText('Serial P24-0000001')).toBeInTheDocument();
     expect(screen.getByText('24M Primer 1 L')).toBeInTheDocument();
-    const confirm = screen.getByRole('button', { name: '₹100 paid – Confirm' });
+    const confirm = screen.getByRole('button', { name: 'Paid ₹100 to painter' });
     await userEvent.dblClick(confirm);
     expect(await screen.findByText('navigated')).toBeInTheDocument();
     expect(redeemCalls).toBe(1);
+  });
+
+  it('two choices only: Paid and Declined to pay', async () => {
+    signIn();
+    rpc({ check_coupon: VALID });
+    renderAt(<CouponPage />, { path: '/c/:code', route: `/c/${CODE}` });
+    await screen.findByText('Valid coupon · ₹100');
+    expect(screen.getAllByRole('button')).toHaveLength(2);
+    expect(screen.getByRole('button', { name: 'Declined to pay' })).toBeInTheDocument();
+  });
+
+  it('Declined to pay records the choice, pays nothing, and offers the next scan', async () => {
+    signIn();
+    let sent: unknown = null;
+    let redeemCalls = 0;
+    rpc({
+      check_coupon: VALID,
+      decline_payment: (a) => {
+        sent = a['p_code'];
+        return { result: 'DECLINED', serial: 'P24-0000001', value_paise: 10000 };
+      },
+      redeem: () => {
+        redeemCalls += 1;
+        return REDEEMED;
+      },
+    });
+    renderAt(<CouponPage />, { path: '/c/:code', route: `/c/${CODE}` });
+    await userEvent.click(await screen.findByRole('button', { name: 'Declined to pay' }));
+    expect(
+      await screen.findByText('Noted: you did not pay. The coupon stays valid.'),
+    ).toBeInTheDocument();
+    expect(sent).toBe(CODE);
+    expect(redeemCalls).toBe(0);
+    expect(screen.getByRole('link', { name: 'Scan next coupon' })).toBeInTheDocument();
+  });
+
+  it('declining a coupon the server says is not valid shows why', async () => {
+    signIn();
+    rpc({
+      check_coupon: VALID,
+      decline_payment: { result: 'ALREADY_REDEEMED_OTHER', serial: 'P24-0000001' },
+    });
+    renderAt(<CouponPage />, { path: '/c/:code', route: `/c/${CODE}` });
+    await userEvent.click(await screen.findByRole('button', { name: 'Declined to pay' }));
+    expect(
+      await screen.findByText('Already used at another shop. Do NOT pay.'),
+    ).toBeInTheDocument();
+  });
+
+  it('a failed decline is shown as a failure, not as noted', async () => {
+    signIn();
+    rpc({ check_coupon: VALID, decline_payment: err(500, 'x') });
+    renderAt(<CouponPage />, { path: '/c/:code', route: `/c/${CODE}` });
+    await userEvent.click(await screen.findByRole('button', { name: 'Declined to pay' }));
+    expect(await screen.findByText('No internet. Don’t pay yet.')).toBeInTheDocument();
   });
 
   it('EC-021 already used elsewhere: red, Do NOT pay, no confirm button', async () => {
@@ -123,7 +178,7 @@ describe('CouponPage (§4.1)', () => {
     signIn();
     rpc({ check_coupon: VALID, redeem: err(403, 'FORBIDDEN') });
     renderAt(<CouponPage />, { path: '/c/:code', route: `/c/${CODE}` });
-    await userEvent.click(await screen.findByRole('button', { name: '₹100 paid – Confirm' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Paid ₹100 to painter' }));
     expect(await screen.findByText('Not redeemed. Try again.')).toBeInTheDocument();
   });
 
@@ -143,75 +198,24 @@ describe('CouponPage (§4.1)', () => {
   });
 });
 
-describe('ReceiptPage (§4.2)', () => {
-  it('shows the painter QR, number and message, and updates live to confirmed', async () => {
+describe('ReceiptPage', () => {
+  it('shows what was paid, with nothing to wait for', () => {
     signIn();
-    let polls = 0;
-    rpc({
-      dealer_home: HOME,
-      batch_status: () => {
-        polls += 1;
-        return {
-          batch_id: 42,
-          status: polls > 1 ? 'CONFIRMED' : 'PENDING',
-          count: 1,
-          value_paise: 10000,
-          token: 'K7Q2M9',
-        };
-      },
-    });
     renderAt(<ReceiptPage />, { path: '/receipt/:batchId', route: '/receipt/42', state: REDEEMED });
     expect(screen.getByText('Redeemed ✓ ₹100')).toBeInTheDocument();
-    expect(
-      await screen.findByRole('img', { name: 'QR code. Message: 24M PAID K7Q2M9' }),
-    ).toBeInTheDocument();
-    expect(screen.getByText('Or send this on WhatsApp to +919000000000:')).toBeInTheDocument();
-    expect(
-      await screen.findByText('Painter confirmed ✓', {}, { timeout: 5000 }),
-    ).toBeInTheDocument();
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Scan next coupon' })).toBeInTheDocument();
   });
 
-  it('EC-095 painter has no WhatsApp', async () => {
+  it('after a reload it reads the saved batch', async () => {
     signIn();
-    let skipped = false;
-    rpc({
-      dealer_home: HOME,
-      batch_status: () => ({
-        batch_id: 42,
-        status: skipped ? 'SKIPPED' : 'PENDING',
-        count: 1,
-        value_paise: 10000,
-        token: 'K7Q2M9',
-      }),
-      skip_painter_confirmation: () => {
-        skipped = true;
-        return {};
-      },
-    });
+    rpc({ batch_status: { batch_id: 42, status: 'NONE', count: 2, value_paise: 20000 } });
     renderAt(<ReceiptPage />, { path: '/receipt/:batchId', route: '/receipt/42' });
-    await userEvent.click(await screen.findByRole('button', { name: 'Painter has no WhatsApp' }));
-    expect(await screen.findByText('Marked: painter has no WhatsApp')).toBeInTheDocument();
-  });
-
-  it.each([
-    ['DISPUTED', 'Painter says NOT paid. Coupons on hold.'],
-    ['LATE', 'Painter confirmed (late) ✓'],
-    ['EXPIRED', 'Painter did not confirm'],
-    ['NONE', 'No painter confirmation'],
-  ])('outcome %s', async (status, text) => {
-    signIn();
-    rpc({
-      dealer_home: HOME,
-      batch_status: { batch_id: 42, status, count: 2, value_paise: 20000 },
-    });
-    renderAt(<ReceiptPage />, { path: '/receipt/:batchId', route: '/receipt/42' });
-    expect(await screen.findByText(text)).toBeInTheDocument();
-    expect(screen.getByText('2 coupons')).toBeInTheDocument();
+    expect(await screen.findByText('2 coupons')).toBeInTheDocument();
   });
 
   it('EC-027 partial batches list what was not redeemed', () => {
     signIn();
-    rpc({ dealer_home: HOME, batch_status: err(500, 'x') });
     const partial = {
       ...REDEEMED,
       result: 'PARTIAL',
@@ -222,38 +226,8 @@ describe('ReceiptPage (§4.2)', () => {
     expect(screen.getByText(/Already used at another shop/)).toBeInTheDocument();
   });
 
-  it('summarise prefers live status for the token', () => {
-    expect(summarise(null, null)).toMatchObject({ count: 0, value: 0, token: null });
-    expect(
-      summarise(null, { batch_id: 1, status: 'PENDING', count: 2, value_paise: 5, token: 'T1' })
-        .token,
-    ).toBe('T1');
-  });
-
-  it('2.2.1 warns before hiding the QR and lets the dealer keep showing it', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    try {
-      signIn();
-      rpc({
-        dealer_home: HOME,
-        batch_status: {
-          batch_id: 42,
-          status: 'PENDING',
-          count: 1,
-          value_paise: 10000,
-          token: 'K7Q2M9',
-        },
-      });
-      renderAt(<ReceiptPage />, { path: '/receipt/:batchId', route: '/receipt/42' });
-      await screen.findByRole('img');
-      await vi.advanceTimersByTimeAsync(8.5 * 60_000);
-      const keep = await screen.findByRole('button', { name: 'Keep showing' });
-      await vi.advanceTimersByTimeAsync(2 * 60_000);
-      expect(await screen.findByRole('button', { name: 'Show painter QR' })).toBeInTheDocument();
-      expect(keep).not.toBeInTheDocument();
-    } finally {
-      vi.useRealTimers();
-    }
+  it('summarise falls back to zeros with nothing loaded', () => {
+    expect(summarise(null, null)).toMatchObject({ count: 0, value: 0 });
   });
 });
 
@@ -309,7 +283,6 @@ describe('Home, history, type, scan', () => {
     expect(await screen.findByText('Namaste, Owner A')).toBeInTheDocument();
     expect(screen.getByText('₹300')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'My claims' })).toBeInTheDocument();
-    expect(screen.getByText('1 waiting for painter')).toBeInTheDocument();
     server.use(http.post(`${API}/rest/v1/rpc/dealer_home`, () => HttpResponse.error()));
     renderAt(<HomePage userRole="DEALER_STAFF" />);
     expect(await screen.findByText(/Last updated/)).toBeInTheDocument();
@@ -323,30 +296,22 @@ describe('Home, history, type, scan', () => {
     expect(screen.queryByRole('link', { name: 'My claims' })).not.toBeInTheDocument();
   });
 
-  it('history lists batches with painter status, re-show QR and paging', async () => {
+  it('history lists batches and pages', async () => {
     signIn();
-    const row = (id: number, token: string | null) => ({
+    const row = (id: number) => ({
       batch_id: id,
       created_at: '2026-10-26T10:00:00Z',
       count: 1,
       value_paise: 10000,
       redeemed_by: 'Staff A',
-      painter_status: token === null ? 'CONFIRMED' : 'PENDING',
-      token,
       serials: ['P24-1'],
     });
     rpc({
       my_batches: ({ p_before_id }) =>
-        p_before_id === null
-          ? Array.from({ length: 20 }, (_, i) => row(100 - i, i === 0 ? 'K7Q2M9' : null))
-          : [row(1, null)],
+        p_before_id === null ? Array.from({ length: 20 }, (_, i) => row(100 - i)) : [row(1)],
     });
     renderAt(<HistoryPage />);
-    expect(await screen.findAllByText('✓ Confirmed')).toHaveLength(19);
-    expect(screen.getByRole('link', { name: 'Show painter QR' })).toHaveAttribute(
-      'href',
-      '/receipt/100',
-    );
+    expect(await screen.findAllByText(/by Staff A/)).toHaveLength(20);
     await userEvent.click(screen.getByRole('button', { name: 'Show more' }));
     await waitFor(() => {
       expect(screen.getAllByRole('listitem')).toHaveLength(21);

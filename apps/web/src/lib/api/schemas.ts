@@ -1,4 +1,4 @@
-import { COUPON_RESULTS, PAINTER_STATUSES } from '@24m/shared';
+import { COUPON_RESULTS } from '@24m/shared';
 import * as v from 'valibot';
 
 const Result = v.picklist(COUPON_RESULTS);
@@ -30,7 +30,6 @@ export const RedeemResponse = v.object({
   batch_id: v.optional(v.number()),
   count: v.optional(v.number()),
   value_paise: v.optional(v.number()),
-  painter_token: v.optional(v.nullable(v.string())),
   lines: v.optional(v.array(RedeemLine), []),
   at: v.optional(Ts),
 });
@@ -43,16 +42,8 @@ export const OutcomeResponse = v.union([
 
 export const BatchStatus = v.object({
   batch_id: v.number(),
-  status: v.union([v.picklist(PAINTER_STATUSES), v.literal('NONE')]),
   count: v.number(),
   value_paise: v.number(),
-  token: v.optional(v.nullable(v.string())),
-  on_time_until: v.optional(v.nullable(Ts)),
-  expires_at: v.optional(v.nullable(Ts)),
-  confirmed_at: v.optional(v.nullable(Ts)),
-  painter: v.optional(v.nullable(v.string())),
-  created_at: v.optional(Ts),
-  server_now: v.optional(Ts),
 });
 export type BatchStatus = v.InferOutput<typeof BatchStatus>;
 
@@ -61,10 +52,8 @@ export const DealerHome = v.object({
   today_paise: v.number(),
   month_count: v.number(),
   month_paise: v.number(),
-  pending_painter: v.number(),
   dealer: v.nullable(v.object({ name: v.string(), status: v.string() })),
   user: v.object({ name: v.string(), role: v.string() }),
-  wa_business_number: v.nullable(v.string()),
   helpline: v.nullable(v.string()),
   as_of: Ts,
 });
@@ -77,8 +66,6 @@ export const BatchList = v.array(
     count: v.number(),
     value_paise: v.number(),
     redeemed_by: v.string(),
-    painter_status: v.string(),
-    token: v.nullable(v.string()),
     serials: v.nullable(v.array(v.string())),
   }),
 );

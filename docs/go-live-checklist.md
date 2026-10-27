@@ -16,19 +16,24 @@ to your own domain, repeat every step that mentions `APP_ADDRESS` with the new a
 
 ## Priority
 
-| #   | Step                              | Needed for                             | Time                |
-| --- | --------------------------------- | -------------------------------------- | ------------------- |
-| A1  | Set the `APP_URL` secret          | Login links and every admin screen     | 1 min               |
-| A2  | Auth URL settings                 | Login links landing on the right site  | 2 min               |
-| A3  | Run the missing SQL               | Dealer reassignment and weekly cleanup | 2 min               |
-| A4  | Auth security settings            | Safe sign-in                           | 3 min               |
-| A5  | Create the first two 24M users    | Anyone being able to log in            | 10 min              |
-| B1  | Check the Vercel project settings | The app building correctly             | 3 min               |
-| B2  | Vercel plan: upgrade to Pro       | Allowed commercial use                 | 2 min               |
-| A6  | WhatsApp secrets and Vault        | Painter confirmation replies           | after Meta approval |
-| B3  | Your own domains                  | Printed QR codes                       | when decided        |
+| #   | Step                              | Needed for                             | Time         |
+| --- | --------------------------------- | -------------------------------------- | ------------ |
+| A1  | Set the `APP_URL` secret          | Login links and every admin screen     | 1 min        |
+| A2  | Auth URL settings                 | Login links landing on the right site  | 2 min        |
+| A3  | Run the missing SQL               | Dealer reassignment and weekly cleanup | 2 min        |
+| A4  | Auth security settings            | Safe sign-in                           | 3 min        |
+| A5  | Create the first two 24M users    | Anyone being able to log in            | 10 min       |
+| B1  | Check the Vercel project settings | The app building correctly             | 3 min        |
+| B2  | Vercel plan: upgrade to Pro       | Allowed commercial use                 | 2 min        |
+| A6  | Set the helpline number           | The "Call 24M" link dealers see        | 1 min        |
+| B3  | Your own domains                  | Printed QR codes                       | when decided |
 
 A1 to A5 and B1 get the app usable. A6 and B3 can wait, but read the warnings on them.
+
+**Painter WhatsApp confirmation is switched off.** The dealer now sees only "Paid ₹100 to painter" and
+"Declined to pay". You do not need a Meta account, the five `META_*` and `WA_SENDER_SECRET` secrets,
+the Vault values or the webhook. The code stays in the project, switched off by the `app_config` flag
+`painter_confirmation_enabled`, in case you want it back.
 
 ---
 
@@ -184,48 +189,15 @@ unlock.
 **Then, as admin, in this order** (details in `docs/runbooks/README.md`): add SKUs, add the
 distributor, add dealers (or upload a CSV), create each owner's login and send the login link.
 
-### A6. WhatsApp secrets and Vault (when Meta is ready)
+### A6. Set the helpline number
 
-Painter confirmation replies only work after this. Dealers can already redeem coupons without it.
+In Supabase **SQL Editor**, with the number dealers should call:
 
-**Get these from Meta** (<https://developers.facebook.com>, your app, then WhatsApp, then API Setup and
-Webhooks). You need a verified Meta Business account and a dedicated number:
+```sql
+update public.app_config set value = '"+91 98XXXXXXXX"' where key = 'helpline';
+```
 
-| Secret                 | Where to find it                                                                |
-| ---------------------- | ------------------------------------------------------------------------------- |
-| `META_APP_SECRET`      | App settings, then Basic, then App secret                                       |
-| `META_ACCESS_TOKEN`    | A permanent system-user token with the `whatsapp_business_messaging` permission |
-| `META_PHONE_NUMBER_ID` | WhatsApp, then API Setup, then Phone number ID                                  |
-| `META_VERIFY_TOKEN`    | Make up a long random string. You type the same one into Meta in step 3.        |
-| `WA_SENDER_SECRET`     | Make up a long random string. Generate with `openssl rand -hex 32`.             |
-
-1. In Supabase, **Edge Functions**, then **Secrets**: add the five secrets above, one by one.
-   Optional: `META_GRAPH_VERSION` (leave unset to use `v21.0`).
-2. In Supabase **SQL Editor**, store the two values the one-minute retry job needs. Replace the
-   second value with the exact `WA_SENDER_SECRET` you chose:
-
-   ```sql
-   select vault.create_secret(
-     'https://cgkspifvzbyqcoamgafc.supabase.co/functions/v1/wa-sender', 'wa_sender_url');
-   select vault.create_secret('PASTE_THE_SAME_WA_SENDER_SECRET', 'wa_sender_secret');
-   ```
-
-   If it says the `vault` schema does not exist, go to **Database**, then **Extensions**, enable
-   `supabase_vault`, and run it again.
-
-3. In Meta, WhatsApp, then Configuration, then Webhook: set the **Callback URL** to
-   `https://cgkspifvzbyqcoamgafc.supabase.co/functions/v1/wa-webhook` and the **Verify token** to your
-   `META_VERIFY_TOKEN`. Click **Verify and save**, then subscribe to the **messages** field.
-4. Set the `helpline` and WhatsApp number the app shows. In Supabase **SQL Editor** (digits only for
-   the number, with the country code):
-
-   ```sql
-   update public.app_config set value = '"+91 98XXXXXXXX"' where key = 'helpline';
-   update public.app_config set value = '"919XXXXXXXXX"' where key = 'wa_business_number';
-   ```
-
-**Check it worked:** send `HELP` from any phone to the business number. You should get the help
-message back within seconds.
+**Check it worked:** sign in as a dealer. The "Call 24M" link shows that number.
 
 ### A7. Later: coupon domain and Mumbai (read before printing)
 
@@ -233,7 +205,7 @@ message back within seconds.
   contains it and cannot be changed afterwards.
 - When decided, add the Edge Function secret `COUPON_HOST` with the bare host, for example
   `c.24m.in` (no `https://`).
-- The project is in Tokyo. For painter data in India, create a new project in Mumbai before real
+- The project is in Tokyo. For dealer data in India, create a new project in Mumbai before real
   use. This cannot be changed in place. Tell me and I will re-run all the migrations there.
 - The Free plan has no automatic backups. Move to **Pro** before real dealers use it.
 

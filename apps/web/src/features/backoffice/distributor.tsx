@@ -13,7 +13,6 @@ import {
   ErrorState,
   Field,
   Money,
-  painterTone,
   Select,
   Skeleton,
   StatusPill,
@@ -129,15 +128,6 @@ function lineColumns(i: ReturnType<typeof useI18n>, decide: Decide): Column<Row>
       key: 'redeemed_at',
       label: i.t('col.redeemed'),
       value: (r) => i.dateTime(str(r, 'redeemed_at')),
-    },
-    {
-      key: 'painter_status',
-      label: i.t('col.painter'),
-      render: (r) => (
-        <StatusPill tone={painterTone(str(r, 'painter_status'))}>
-          {i.t(`pstatus.${str(r, 'painter_status')}` as Key)} {str(r, 'painter')}
-        </StatusPill>
-      ),
     },
     {
       key: 'line_status',

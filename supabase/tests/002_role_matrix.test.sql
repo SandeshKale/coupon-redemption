@@ -15,6 +15,7 @@ insert into matrix values
   ($$public.redemption_outcome(gen_random_uuid())$$, '{DEALER_OWNER,DEALER_STAFF}'),
   ($$public.batch_status(0)$$, '{DEALER_OWNER,DEALER_STAFF}'),
   ($$public.skip_painter_confirmation(0, 'NO_PHONE')$$, '{DEALER_OWNER,DEALER_STAFF}'),
+  ($$public.decline_payment('x')$$, '{DEALER_OWNER,DEALER_STAFF}'),
   ($$public.dealer_home()$$, '{DEALER_OWNER,DEALER_STAFF}'),
   ($$public.my_batches(1, null)$$, '{DEALER_OWNER,DEALER_STAFF}'),
   ($$public.submit_dealer_claim()$$, '{DEALER_OWNER}'),

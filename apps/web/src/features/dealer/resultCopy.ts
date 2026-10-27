@@ -23,6 +23,7 @@ const FIXED: Record<
 > = {
   REDEEMED: ['valid', 'result.redeemed'],
   PARTIAL: ['valid', 'result.redeemed'],
+  DECLINED: ['warning', 'result.declined'],
   ALREADY_REDEEMED_OTHER: ['invalid', 'result.already_other'],
   NOT_FOUND: ['invalid', 'result.not_found'],
   NOT_ACTIVE: ['invalid', 'result.not_active'],

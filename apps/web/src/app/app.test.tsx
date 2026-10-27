@@ -96,7 +96,7 @@ describe('routing and gates', () => {
       r.unmount();
     }
     const r = app('/receipt/1');
-    expect(await screen.findByText('No painter confirmation')).toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: 'Scan next coupon' })).toBeInTheDocument();
     r.unmount();
     app('/auth/callback');
   });
@@ -125,7 +125,7 @@ describe('Shell', () => {
     });
     rest({ app_user: PROFILE('DEALER_OWNER') });
     app('/');
-    expect(await screen.findByText('Painter confirmed ✓')).toBeInTheDocument();
+    expect(await screen.findByText('Redeemed ✓ ₹100')).toBeInTheDocument();
     expect(localStorage.getItem(PENDING_KEY)).toBeNull();
   });
 
@@ -178,7 +178,7 @@ describe('misc', () => {
         <PrivacyPage />
       </I18nProvider>,
     );
-    expect(screen.getByText(/Reply STOP/)).toBeInTheDocument();
+    expect(screen.getByText(/do not collect painters’ phone numbers/)).toBeInTheDocument();
     prefetchReceipt();
     const setTimeout = vi.fn((cb: () => void) => (cb(), 1));
     prefetchDealerRoutes({ navigator: {}, setTimeout } as unknown as Window);

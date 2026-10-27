@@ -47,7 +47,7 @@ for (const profile of Object.keys(TARGET_MS) as Profile[]) {
     const scanToResult = Date.now() - t0;
 
     const t1 = Date.now();
-    await page.getByRole('button', { name: '₹100 paid – Confirm' }).click();
+    await page.getByRole('button', { name: 'Paid ₹100 to painter' }).click();
     await expect(page.getByText('Redeemed ✓ ₹100')).toBeVisible();
     const confirmToReceipt = Date.now() - t1;
 
@@ -94,7 +94,7 @@ test('§18.5 flaky (3G, 20% request failures): correct final result, never a dup
   await page.goto('/');
   await throttle(page, '3g');
   await page.goto(`/c/${CODE}`);
-  await page.getByRole('button', { name: '₹100 paid – Confirm' }).click();
+  await page.getByRole('button', { name: 'Paid ₹100 to painter' }).click();
   await expect(page.getByText('Redeemed ✓ ₹100')).toBeVisible({ timeout: 30_000 });
   expect(keys.size).toBe(1);
 });

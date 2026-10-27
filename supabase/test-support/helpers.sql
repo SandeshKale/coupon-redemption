@@ -128,3 +128,7 @@ create or replace function tests.claims(p_who text, p_aal text default 'aal1') r
   select set_config('request.jwt.claims', jsonb_build_object('sub', auth_user_id, 'aal', p_aal)::text, true)
     from public.app_user where name = p_who;
 $$;
+
+-- Production ships with painter confirmation off (migration 0015). The suites that cover the dormant
+-- painter/WhatsApp feature run with it on; 093_two_option_flow.test.sql covers the shipped default.
+update public.app_config set value = 'true' where key = 'painter_confirmation_enabled';

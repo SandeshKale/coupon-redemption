@@ -1,8 +1,9 @@
 # 24M Primer ₹100 Painter Coupon
 
-A dealer scans the coupon inside a can of 24M Primer and pays the painter ₹100. The painter
-confirms on WhatsApp, and the coupon moves dealer → distributor → 24M for settlement. The full
-specification is [docs/plan.md](docs/plan.md) (v2); decisions that differ from it are in
+A dealer scans the coupon inside a can of 24M Primer and taps **Paid ₹100 to painter** or
+**Declined to pay**. A paid coupon moves dealer → distributor → 24M for settlement. The painter
+WhatsApp confirmation in the plan is switched off ([ADR-0006](docs/adr/0006-two-option-dealer-flow.md)).
+The full specification is [docs/plan.md](docs/plan.md) (v2); decisions that differ from it are in
 [docs/adr](docs/adr).
 
 ## Architecture

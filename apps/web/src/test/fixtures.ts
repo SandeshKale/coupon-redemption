@@ -17,7 +17,6 @@ export const REDEEMED = {
   batch_id: 42,
   count: 1,
   value_paise: 10000,
-  painter_token: 'K7Q2M9',
   lines: [{ code: CODE, serial: 'P24-0000001', result: 'REDEEMED', value_paise: 10000 }],
   at: '2026-10-26T10:00:00Z',
 };
@@ -26,10 +25,8 @@ export const HOME = {
   today_paise: 30000,
   month_count: 20,
   month_paise: 200000,
-  pending_painter: 1,
   dealer: { name: 'Shree Ganesh Paints', status: 'ACTIVE' },
   user: { name: 'Owner A', role: 'DEALER_OWNER' },
-  wa_business_number: '919000000000',
   helpline: '+91 20 0000 0000',
   as_of: '2026-10-26T10:00:00Z',
 };

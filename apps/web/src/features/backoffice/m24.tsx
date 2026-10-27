@@ -13,7 +13,6 @@ import {
   ErrorState,
   Field,
   Money,
-  painterTone,
   Select,
   Skeleton,
   StatusPill,
@@ -646,15 +645,6 @@ function m24LineColumns(
       value: (r) => num(r, 'value_paise'),
     },
     {
-      key: 'painter_status',
-      label: i.t('col.painter'),
-      render: (r) => (
-        <StatusPill tone={painterTone(str(r, 'painter_status'))}>
-          {i.t(`pstatus.${str(r, 'painter_status')}` as Key)}
-        </StatusPill>
-      ),
-    },
-    {
       key: 'line_status',
       label: i.t('col.status'),
       value: (r) => i.t(`status.${str(r, 'line_status')}` as Key),
@@ -806,7 +796,6 @@ function CouponCard({
         <Money paise={num(coupon, 'value_paise')} />
       </p>
       <p>{str((result['dealer'] ?? {}) as Row, 'name')}</p>
-      <PainterLine painter={result['painter']} admin={admin} />
       <RowsView
         query={{ data: events, error: null, isLoading: false, refetch: () => undefined }}
         caption={i.t('nav.lookup')}
@@ -814,38 +803,6 @@ function CouponCard({
       />
       {admin ? <AdminCouponActions couponId={num(coupon, 'id')} /> : null}
     </Section>
-  );
-}
-
-/** Masked for everyone; the full number (§6.9) only for 24M admins, on request. */
-function PainterLine({
-  painter,
-  admin,
-}: {
-  readonly painter: unknown;
-  readonly admin: boolean;
-}): ReactNode {
-  const i = useI18n();
-  const [show, setShow] = useState(false);
-  if (typeof painter !== 'object' || painter === null) return null;
-  const p = painter as Row;
-  return (
-    <p>
-      <StatusPill tone={painterTone(str(p, 'status'))}>
-        {i.t(`pstatus.${str(p, 'status')}` as Key)}
-      </StatusPill>{' '}
-      {show ? str(p, 'painter') : null}
-      {admin && !show ? (
-        <Button
-          variant="ghost"
-          onClick={() => {
-            setShow(true);
-          }}
-        >
-          {i.t('m24.painterNumber')}
-        </Button>
-      ) : null}
-    </p>
   );
 }
 
@@ -882,18 +839,6 @@ function AdminCouponActions({ couponId }: { readonly couponId: number }): ReactN
 
 const REVIEW: readonly { title: Key; path: string; cols: readonly string[]; csv?: string }[] = [
   {
-    title: 'col.rate',
-    path: 'v_dealer_confirmation_rate?select=dealer_id,dealer_name,coupons,confirmed_coupons,rate_pct,below_threshold&order=rate_pct.asc',
-    cols: ['dealer_name', 'coupons', 'confirmed_coupons', 'rate_pct', 'below_threshold'],
-    csv: 'confirmation-rate',
-  },
-  {
-    title: 'col.flags',
-    path: 'v_painter_flags?select=painter_id,painter,painter_status,flag,occurrences,last_seen',
-    cols: ['painter', 'flag', 'occurrences', 'painter_status'],
-    csv: 'painter-flags',
-  },
-  {
     title: 'col.attempts',
     path: 'v_invalid_scans?select=user_id,user_name,dealer_id,result,attempts,last_at&order=attempts.desc',
     cols: ['user_name', 'dealer_id', 'result', 'attempts'],
@@ -917,17 +862,6 @@ const REVIEW: readonly { title: Key; path: string; cols: readonly string[]; csv?
     title: 'claims.markReceived',
     path: 'v_unacked_cn?select=claim_id,dealer_name,cn_no,cn_date,cn_total_paise',
     cols: ['claim_id', 'dealer_name', 'cn_no', 'cn_date'],
-  },
-  {
-    title: 'col.wa',
-    path: 'v_wa_health?select=*',
-    cols: [
-      'last_inbound_at',
-      'webhook_errors_24h',
-      'outbox_failed_1h',
-      'outbox_pending',
-      'batches_24h',
-    ],
   },
 ];
 
@@ -956,58 +890,6 @@ function ReviewTable({
   );
 }
 
-function DisputesSection({ admin }: { readonly admin: boolean }): ReactNode {
-  const i = useI18n();
-  const act = useAction();
-  const disputes = useRows(
-    'v_disputes?select=batch_id,status,flags,dealer_name,coupon_count,value_paise,painter,disputed_at',
-  );
-  const resolve = (batchId: number, decision: 'RELEASE' | 'REJECT'): void => {
-    void act.run('resolve_dispute', {
-      p_batch_id: batchId,
-      p_decision: decision,
-      p_note: `Resolved in weekly review: ${decision.toLowerCase()}`,
-    });
-  };
-  return (
-    <Section title={i.t('m24.disputes')}>
-      <Status message={act.message} error={act.error} />
-      <RowsView
-        query={disputes}
-        caption={i.t('m24.disputes')}
-        columns={[
-          ...cols(i.t, ['batch_id', 'status', 'dealer_name', 'coupon_count', 'painter']),
-          {
-            key: 'actions',
-            label: i.t('col.actions'),
-            render: (r) =>
-              admin ? (
-                <span className="flex gap-1">
-                  <Button
-                    variant="secondary"
-                    onClick={() => {
-                      resolve(num(r, 'batch_id'), 'RELEASE');
-                    }}
-                  >
-                    {i.t('m24.release')}
-                  </Button>
-                  <Button
-                    variant="danger"
-                    onClick={() => {
-                      resolve(num(r, 'batch_id'), 'REJECT');
-                    }}
-                  >
-                    {i.t('m24.rejectDispute')}
-                  </Button>
-                </span>
-              ) : null,
-          },
-        ]}
-      />
-    </Section>
-  );
-}
-
 /** Weekly review (§22): disputes first, then flags and health; logged with date and reviewer. */
 export function ReviewPage({ role }: { readonly role: string }): ReactNode {
   const i = useI18n();
@@ -1015,7 +897,6 @@ export function ReviewPage({ role }: { readonly role: string }): ReactNode {
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-2xl font-bold">{i.t('nav.review')}</h1>
-      <DisputesSection admin={role === 'M24_ADMIN'} />
       {REVIEW.map((r) => (
         <ReviewTable key={r.path} title={r.title} path={r.path} columns={r.cols} csv={r.csv} />
       ))}

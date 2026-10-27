@@ -22,10 +22,3 @@ export function StatusPill({
     </span>
   );
 }
-
-export function painterTone(status: string): Tone {
-  if (status === 'CONFIRMED') return 'good';
-  if (status === 'DISPUTED') return 'bad';
-  if (status === 'LATE') return 'warn';
-  return 'neutral';
-}

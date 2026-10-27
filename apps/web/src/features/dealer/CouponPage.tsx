@@ -18,6 +18,7 @@ type View =
   | { kind: 'loading' }
   | { kind: 'local_invalid'; notOurs: boolean }
   | { kind: 'checked'; data: CheckResponse; code: string }
+  | { kind: 'declined'; serial: string | undefined }
   | {
       kind: 'public';
       result: 'GENUINE' | 'NOT_RECOGNISED' | 'INVALID_FORMAT' | 'RATE_LIMITED';
@@ -37,6 +38,7 @@ export function CouponPage(): ReactNode {
   const navigate = useNavigate();
   const [view, setView] = useState<View>({ kind: 'loading' });
   const { state, redeem, busy } = useRedeem();
+  const [declining, setDeclining] = useState(false);
   const raw = params['code'] ?? '';
 
   const load = useCallback(async () => {
@@ -77,6 +79,15 @@ export function CouponPage(): ReactNode {
     }
   };
 
+  const decline = async (code: string): Promise<void> => {
+    setDeclining(true);
+    const r = await api.rpc('decline_payment', { p_code: code }, CheckResponse);
+    setDeclining(false);
+    if (!r.ok) setView({ kind: 'failed', error: r.error });
+    else if (r.data.result === 'DECLINED') setView({ kind: 'declined', serial: r.data.serial });
+    else setView({ kind: 'checked', data: r.data, code });
+  };
+
   return (
     <div className="flex flex-col gap-4">
       {net === 'offline' ? <Banner tone="warning">{i.t('state.offline')}</Banner> : null}
@@ -85,9 +96,10 @@ export function CouponPage(): ReactNode {
       ) : null}
       <CouponBody
         view={view}
-        busy={busy}
+        busy={busy || declining}
         redeemState={state}
         onConfirm={confirm}
+        onDecline={decline}
         onRetry={() => void load()}
       />
     </div>
@@ -99,10 +111,18 @@ interface BodyProps {
   readonly busy: boolean;
   readonly redeemState: ReturnType<typeof useRedeem>['state'];
   readonly onConfirm: (code: string) => Promise<void>;
+  readonly onDecline: (code: string) => Promise<void>;
   readonly onRetry: () => void;
 }
 
-function CouponBody({ view, busy, redeemState, onConfirm, onRetry }: BodyProps): ReactNode {
+function CouponBody({
+  view,
+  busy,
+  redeemState,
+  onConfirm,
+  onDecline,
+  onRetry,
+}: BodyProps): ReactNode {
   const i = useI18n();
   switch (view.kind) {
     case 'loading':
@@ -128,8 +148,11 @@ function CouponBody({ view, busy, redeemState, onConfirm, onRetry }: BodyProps):
           busy={busy}
           redeemState={redeemState}
           onConfirm={onConfirm}
+          onDecline={onDecline}
         />
       );
+    case 'declined':
+      return <DeclinedResult serial={view.serial} />;
   }
 }
 
@@ -162,6 +185,7 @@ function CheckedResult({
   busy,
   redeemState,
   onConfirm,
+  onDecline,
 }: Omit<BodyProps, 'view' | 'onRetry'> & {
   readonly data: CheckResponse;
   readonly code: string;
@@ -181,9 +205,12 @@ function CheckedResult({
       </ResultCard>
       {redeemFailed ? <ResultCard variant="warning" title={i.t('state.notRedeemed')} /> : null}
       {r.payable ? (
-        <div className="sticky bottom-0 bg-surface pb-4">
+        <div className="sticky bottom-0 flex flex-col gap-3 bg-surface pb-4">
           <Button size="lg" loading={busy} onClick={() => void onConfirm(code)}>
             {i.t('action.confirm', { amount: i.money(data.value_paise ?? 0) })}
+          </Button>
+          <Button size="lg" variant="secondary" loading={busy} onClick={() => void onDecline(code)}>
+            {i.t('action.decline')}
           </Button>
         </div>
       ) : (
@@ -194,6 +221,23 @@ function CheckedResult({
           {i.t('action.scanNext')}
         </Link>
       )}
+    </>
+  );
+}
+
+function DeclinedResult({ serial }: { readonly serial: string | undefined }): ReactNode {
+  const i = useI18n();
+  return (
+    <>
+      <ResultCard variant="warning" title={i.t('result.declined')}>
+        {serial === undefined ? null : <p>{i.t('result.serial', { serial })}</p>}
+      </ResultCard>
+      <Link
+        to="/scan"
+        className="flex min-h-14 items-center justify-center rounded-btn border-2 border-border font-semibold"
+      >
+        {i.t('action.scanNext')}
+      </Link>
     </>
   );
 }

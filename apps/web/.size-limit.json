@@ -19,9 +19,9 @@
     "gzip": true
   },
   {
-    "name": "QR renderer (lazy)",
-    "path": "dist/assets/QrBlock-*.js",
-    "limit": "10 KB",
+    "name": "claims page with QR renderer (lazy)",
+    "path": "dist/assets/ClaimsPage-*.js",
+    "limit": "15 KB",
     "gzip": true
   },
   { "name": "auth (lazy)", "path": "dist/assets/auth-*.js", "limit": "40 KB", "gzip": true }

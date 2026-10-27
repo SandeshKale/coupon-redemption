@@ -1,22 +1,13 @@
 import { type ReactNode, useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router';
 
 import { BatchList } from '../../lib/api/schemas.ts';
-import { type Key, useI18n } from '../../lib/i18n/index.ts';
+import { useI18n } from '../../lib/i18n/index.ts';
 import { useServices } from '../../lib/services.ts';
-import {
-  Button,
-  EmptyState,
-  ErrorState,
-  Money,
-  painterTone,
-  Skeleton,
-  StatusPill,
-} from '../../ui/index.ts';
+import { Button, EmptyState, ErrorState, Money, Skeleton } from '../../ui/index.ts';
 
 const PAGE = 20;
 
-/** My coupons: batches with painter status; re-show the painter QR within 24 h (EC-096). */
+/** My coupons: what this dealer has paid out, newest first. */
 export function HistoryPage(): ReactNode {
   const i = useI18n();
   const { api } = useServices();
@@ -57,19 +48,6 @@ export function HistoryPage(): ReactNode {
             <p className="text-sm text-muted">
               {i.dateTime(b.created_at)} · {i.t('history.by', { name: b.redeemed_by })}
             </p>
-            <p>
-              <StatusPill tone={painterTone(b.painter_status)}>
-                {i.t(`pstatus.${b.painter_status}` as Key)}
-              </StatusPill>
-            </p>
-            {b.token === null ? null : (
-              <Link
-                to={`/receipt/${b.batch_id}`}
-                className="font-semibold underline underline-offset-4"
-              >
-                {i.t('history.showQr')}
-              </Link>
-            )}
           </li>
         ))}
       </ul>

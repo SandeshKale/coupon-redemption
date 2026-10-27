@@ -2,6 +2,7 @@
 export const COUPON_RESULTS = [
   'VALID',
   'REDEEMED',
+  'DECLINED',
   'PARTIAL',
   'NONE_REDEEMED',
   'INVALID_FORMAT',

@@ -3,9 +3,8 @@ import { expect, test } from '@playwright/test';
 import { CODE, HOME, PROFILE, REDEEMED, signInDealer, stubApi, VALID } from './support/api.ts';
 
 test.describe('§20.6 journeys (stubbed API)', () => {
-  test('J2 redeem one → receipt → painter confirms on WhatsApp → live update', async ({ page }) => {
+  test('J2 scan → Paid ₹100 to painter → receipt', async ({ page }) => {
     await signInDealer(page);
-    let polls = 0;
     let redeems = 0;
     await stubApi(
       page,
@@ -13,26 +12,43 @@ test.describe('§20.6 journeys (stubbed API)', () => {
         check_coupon: VALID,
         redeem: () => ((redeems += 1), REDEEMED),
         dealer_home: HOME,
-        batch_status: () => ({
-          batch_id: 42,
-          status: ++polls > 2 ? 'CONFIRMED' : 'PENDING',
-          count: 1,
-          value_paise: 10000,
-          token: 'K7Q2M9',
-        }),
       },
       { app_user: PROFILE },
     );
     await page.goto(`/c/${CODE.toLowerCase()}`);
     await expect(page.getByRole('status').getByText('Valid coupon · ₹100')).toBeVisible();
-    await page.getByRole('button', { name: '₹100 paid – Confirm' }).dblclick();
+    await expect(page.getByRole('button')).toHaveCount(2);
+    await page.getByRole('button', { name: 'Paid ₹100 to painter' }).dblclick();
     await expect(page.getByText('Redeemed ✓ ₹100')).toBeVisible();
-    await expect(page.getByText('24M PAID K7Q2M9')).toBeVisible();
-    await expect(page.getByText('Painter confirmed ✓')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('img')).toHaveCount(0);
     expect(redeems).toBe(1);
   });
 
-  test('EC-021 used elsewhere: Do NOT pay and no confirm button', async ({ page }) => {
+  test('J3 scan → Declined to pay → noted, nothing redeemed', async ({ page }) => {
+    await signInDealer(page);
+    let redeems = 0;
+    let declines = 0;
+    await stubApi(
+      page,
+      {
+        check_coupon: VALID,
+        redeem: () => ((redeems += 1), REDEEMED),
+        decline_payment: () => (
+          (declines += 1),
+          { result: 'DECLINED', serial: 'P24-0000001', value_paise: 10000 }
+        ),
+        dealer_home: HOME,
+      },
+      { app_user: PROFILE },
+    );
+    await page.goto(`/c/${CODE}`);
+    await page.getByRole('button', { name: 'Declined to pay' }).click();
+    await expect(page.getByText('Noted: you did not pay. The coupon stays valid.')).toBeVisible();
+    expect(declines).toBe(1);
+    expect(redeems).toBe(0);
+  });
+
+  test('EC-021 used elsewhere: Do NOT pay and no pay or decline buttons', async ({ page }) => {
     await signInDealer(page);
     await stubApi(
       page,
@@ -41,7 +57,7 @@ test.describe('§20.6 journeys (stubbed API)', () => {
     );
     await page.goto(`/c/${CODE}`);
     await expect(page.getByRole('alert')).toContainText('Do NOT pay');
-    await expect(page.getByRole('button', { name: /Confirm/ })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /Paid|Declined/ })).toHaveCount(0);
   });
 
   test('EC-041/042 connection drops after Confirm → "Checking result…" → resolved, never twice', async ({
@@ -55,13 +71,6 @@ test.describe('§20.6 journeys (stubbed API)', () => {
       {
         check_coupon: VALID,
         dealer_home: HOME,
-        batch_status: {
-          batch_id: 42,
-          status: 'PENDING',
-          count: 1,
-          value_paise: 10000,
-          token: 'K7Q2M9',
-        },
         redeem: async (args, route) => {
           keys.add(args['p_idem']);
           attempts += 1;
@@ -76,7 +85,7 @@ test.describe('§20.6 journeys (stubbed API)', () => {
       { app_user: PROFILE },
     );
     await page.goto(`/c/${CODE}`);
-    await page.getByRole('button', { name: '₹100 paid – Confirm' }).click();
+    await page.getByRole('button', { name: 'Paid ₹100 to painter' }).click();
     await expect(page.getByText('Checking result… don’t pay again')).toBeVisible();
     await expect(page.getByText('Redeemed ✓ ₹100')).toBeVisible({ timeout: 20_000 });
     expect(keys.size).toBe(1);
@@ -97,7 +106,7 @@ test.describe('§20.6 journeys (stubbed API)', () => {
       { app_user: PROFILE },
     );
     await page.goto(`/c/${CODE}`);
-    await page.getByRole('button', { name: '₹100 paid – Confirm' }).click();
+    await page.getByRole('button', { name: 'Paid ₹100 to painter' }).click();
     await expect(page.getByText('Not redeemed. Try again.')).toBeVisible({ timeout: 20_000 });
   });
 

@@ -19,7 +19,6 @@ import {
   HelpLink,
   LanguageSwitch,
   Money,
-  painterTone,
   ResultCard,
   Select,
   Skeleton,
@@ -76,7 +75,7 @@ describe('small components', () => {
           {'offline'}
         </Banner>
         <Banner tone="info">{'info'}</Banner>
-        <StatusPill tone={painterTone('CONFIRMED')}>{'ok'}</StatusPill>
+        <StatusPill tone="good">{'ok'}</StatusPill>
         <Money paise={10_000_000} />
         <Skeleton lines={2} />
         <EmptyState>{'nothing'}</EmptyState>
@@ -91,11 +90,6 @@ describe('small components', () => {
       'tel:+912000000000',
     );
     expect(screen.getByRole('alert')).toHaveTextContent('Something went wrong');
-    expect([painterTone('DISPUTED'), painterTone('LATE'), painterTone('PENDING')]).toEqual([
-      'bad',
-      'warn',
-      'neutral',
-    ]);
   });
 
   it('ErrorState retry', async () => {

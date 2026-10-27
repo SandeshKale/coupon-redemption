@@ -60,11 +60,13 @@ test.describe('§17 accessibility: 0 axe violations (WCAG 2.2 AA)', () => {
     });
   }
 
-  test('receipt with painter QR, and a do-not-pay result', async ({ page }) => {
+  test('coupon with Paid and Declined buttons, and the receipt', async ({ page }) => {
     await dealer(page);
     await page.goto(`/c/${CODE}`);
-    await page.getByRole('button', { name: '₹100 paid – Confirm' }).click();
-    await expect(page.getByRole('img', { name: /QR code/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Declined to pay' })).toBeVisible();
+    await axe(page);
+    await page.getByRole('button', { name: 'Paid ₹100 to painter' }).click();
+    await expect(page.getByText('Redeemed ✓ ₹100')).toBeVisible();
     await axe(page);
   });
 
@@ -100,7 +102,7 @@ test.describe('§17 accessibility: 0 axe violations (WCAG 2.2 AA)', () => {
     await dealer(page);
     await page.goto(`/c/${CODE}`);
     await expect(page.getByText('Valid coupon · ₹100')).toBeVisible();
-    const confirm = page.getByRole('button', { name: '₹100 paid – Confirm' });
+    const confirm = page.getByRole('button', { name: 'Paid ₹100 to painter' });
     for (
       let i = 0;
       i < 10 && !(await confirm.evaluate((el) => el === document.activeElement));

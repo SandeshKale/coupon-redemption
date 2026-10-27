@@ -11,4 +11,4 @@ export { ResultCard, type ResultVariant } from './ResultCard.tsx';
 export { Scanner } from './Scanner.tsx';
 export { Skeleton } from './Skeleton.tsx';
 export { EmptyState, ErrorState } from './States.tsx';
-export { painterTone, StatusPill, type Tone } from './StatusPill.tsx';
+export { StatusPill, type Tone } from './StatusPill.tsx';
