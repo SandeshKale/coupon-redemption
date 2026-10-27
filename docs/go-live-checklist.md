@@ -288,5 +288,8 @@ It must end with `smoke OK`. Then on a phone:
 2. Log in as the admin (A5), set up two-step verification, and add one test dealer.
 3. Press **Send login link** for that dealer. WhatsApp should open with the Hindi and English message.
 4. The dealer taps the link and lands on the Home screen logged in.
+5. As that dealer, scan a test coupon that an admin has activated. You must see exactly two buttons,
+   **Paid ₹100 to painter** and **Declined to pay**. Tap **Declined to pay** first: the message says
+   the coupon stays valid. Scan it again and tap **Paid**: the receipt shows ₹100 and no QR code.
 
 Send me any step that does not behave as written, with a screenshot, and I will take it from there.
