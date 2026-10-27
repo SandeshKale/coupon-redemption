@@ -250,6 +250,7 @@ describe('24M', () => {
     expect(screen.getByText('DIST-PUNE')).toBeInTheDocument();
     expect(screen.getAllByText('Shree Ganesh Paints').length).toBeGreaterThan(1);
     expect(screen.getByText('P24-0000001')).toBeInTheDocument();
+    expect(screen.getByText('26 Oct 2026, 15:30')).toBeInTheDocument();
   });
 
   it('dashboard: a failure says why, and can be retried', async () => {

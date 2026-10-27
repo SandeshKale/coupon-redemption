@@ -549,7 +549,11 @@ export function DashboardPage(): ReactNode {
       {table(d.by_lot, ['lot_no', 'quantity', 'not_active', 'active', 'validated'], 'stats.byLot')}
       {table(d.by_distributor, ['code', 'name', 'dealers', 'validated'], 'stats.byDistributor')}
       {table(d.top_dealers, ['dealer', 'distributor', 'validated'], 'stats.topDealers')}
-      {table(d.recent, ['serial', 'dealer', 'at'], 'stats.recent')}
+      {table(
+        d.recent.map((r) => ({ ...r, at: i.dateTime(r.at) })),
+        ['serial', 'dealer', 'at'],
+        'stats.recent',
+      )}
     </div>
   );
 }
