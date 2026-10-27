@@ -1,62 +1,76 @@
 import { normaliseE164 } from '@24m/shared';
 import { type ReactNode, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 
 import { loadAuthClient } from '../../lib/auth/client.ts';
 import { useI18n } from '../../lib/i18n/index.ts';
 import { useServices } from '../../lib/services.ts';
 import { Button, Field, ResultCard } from '../../ui/index.ts';
 
+/** Only same-site paths: never an address on another site. */
+export function safeNext(raw: string | null): string {
+  return raw !== null && /^\/(?![/\\])/.test(raw) ? raw : '/';
+}
+
 /**
- * Logged-out screen. Dealers/distributors: "Request new link" (no passwords, 3.3.8).
- * 24M: email + password, then TOTP (enrolment on first login). Codes can be pasted.
+ * Logged-out screen. Dealers, distributors and sales reps: registered mobile number and 4-digit PIN.
+ * 24M staff: email + password, then TOTP (enrolment on first login).
  */
 export function LoginPage(): ReactNode {
   const i = useI18n();
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-2xl font-bold">{i.t('login.title')}</h1>
-      <p>{i.t('login.dealerHelp')}</p>
-      <RequestLink />
-      <M24Login />
+      <PinLogin />
+      <section className="flex flex-col gap-2">
+        <h2 className="text-xl font-bold">{i.t('login.staffTitle')}</h2>
+        <M24Login />
+      </section>
     </div>
   );
 }
 
-function RequestLink(): ReactNode {
+function PinLogin(): ReactNode {
   const i = useI18n();
-  const { callFunction } = useServices();
+  const { pinLogin } = useServices();
+  const navigate = useNavigate();
+  const [params] = useSearchParams();
   const [mobile, setMobile] = useState('');
-  const [msg, setMsg] = useState<string | null>(null);
+  const [pin, setPin] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const e164 = normaliseE164(mobile);
+  const ready = e164 !== null && /^[0-9]{4}$/.test(pin);
+  const submit = async (): Promise<void> => {
+    if (e164 === null) return;
+    setBusy(true);
+    setError(null);
+    const r = await pinLogin(e164, pin);
+    setBusy(false);
+    if (r === 'ok') {
+      void navigate(safeNext(params.get('next')), { replace: true });
+      return;
+    }
+    setPin('');
+    setError(
+      r === 'wrong'
+        ? i.t('login.pinWrong')
+        : r === 'limited'
+          ? i.t('auth.rateLimited')
+          : i.t('auth.requestFailed'),
+    );
+  };
   return (
     <form
       className="flex flex-col gap-3 rounded-card bg-surface-2 p-4"
       onSubmit={(e) => {
         e.preventDefault();
-        if (e164 === null) return;
-        void callFunction('login-link-request', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ mobile: e164 }),
-        })
-          .then((r) => {
-            setMsg(
-              r.status === 429
-                ? i.t('auth.rateLimited')
-                : r.ok
-                  ? i.t('auth.requestSent')
-                  : i.t('common.error'),
-            );
-          })
-          .catch(() => {
-            setMsg(i.t('auth.requestFailed'));
-          });
+        void submit();
       }}
     >
-      <h2 className="text-xl font-bold">{i.t('auth.requestLink')}</h2>
+      <p>{i.t('login.pinHelp')}</p>
       <Field
-        label={i.t('auth.mobile')}
+        label={i.t('login.mobile')}
         value={mobile}
         onChange={(e) => {
           setMobile(e.target.value);
@@ -65,13 +79,26 @@ function RequestLink(): ReactNode {
         inputMode="tel"
         required
       />
+      <Field
+        label={i.t('login.pin')}
+        type="password"
+        value={pin}
+        onChange={(e) => {
+          setPin(e.target.value.replace(/\D/g, ''));
+        }}
+        autoComplete="current-password"
+        inputMode="numeric"
+        maxLength={4}
+        required
+      />
+      {error === null ? null : <ResultCard variant="invalid" title={error} />}
       <Button
         type="submit"
-        disabledReason={mobile !== '' && e164 === null ? i.t('auth.mobile') : null}
+        loading={busy}
+        disabledReason={!ready && (mobile !== '' || pin !== '') ? i.t('login.pinRules') : null}
       >
-        {i.t('auth.requestLink')}
+        {i.t('login.submit')}
       </Button>
-      <p role="status">{msg}</p>
     </form>
   );
 }

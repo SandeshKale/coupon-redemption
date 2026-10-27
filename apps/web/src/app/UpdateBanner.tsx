@@ -1,6 +1,5 @@
 import { type ReactNode, useEffect, useState } from 'react';
 
-import { hasPending } from '../lib/api/redeem.ts';
 import { useI18n } from '../lib/i18n/index.ts';
 import { Banner, Button } from '../ui/index.ts';
 
@@ -16,7 +15,7 @@ export function notifyUpdate(apply: Apply): void {
   });
 }
 
-/** EC-055: "Update available" — applied only on request and never during a redemption. */
+/** EC-055: "Update available" — applied only on request. */
 export function UpdateBanner(): ReactNode {
   const { t } = useI18n();
   const [ready, setReady] = useState(applyUpdate !== null);
@@ -37,7 +36,6 @@ export function UpdateBanner(): ReactNode {
         <span className="w-40">
           <Button
             variant="secondary"
-            disabledReason={hasPending(localStorage) ? t('state.checkingResult') : null}
             onClick={() => {
               void applyUpdate?.();
             }}

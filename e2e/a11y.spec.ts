@@ -1,7 +1,16 @@
 import { AxeBuilder } from '@axe-core/playwright';
 import { expect, type Page, test } from '@playwright/test';
 
-import { CODE, HOME, PROFILE, REDEEMED, signInDealer, stubApi, VALID } from './support/api.ts';
+import {
+  CODE,
+  HOME,
+  PROFILE,
+  PUBLIC_ACTIVE,
+  signInDealer,
+  stubApi,
+  VALID,
+  VALIDATED,
+} from './support/api.ts';
 
 const WCAG = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 
@@ -18,17 +27,10 @@ async function dealer(page: Page): Promise<void> {
     page,
     {
       check_coupon: VALID,
-      redeem: REDEEMED,
+      validate_coupon: VALIDATED,
       dealer_home: HOME,
-      batch_status: {
-        batch_id: 42,
-        status: 'PENDING',
-        count: 1,
-        value_paise: 10000,
-        token: 'K7Q2M9',
-      },
-      my_batches: [],
-      my_claims: [],
+      my_validations: [],
+      public_coupon_info: PUBLIC_ACTIVE,
     },
     { app_user: PROFILE },
   );
@@ -36,7 +38,7 @@ async function dealer(page: Page): Promise<void> {
 
 test.describe('§17 accessibility: 0 axe violations (WCAG 2.2 AA)', () => {
   test('public coupon page', async ({ page }) => {
-    await stubApi(page, { public_coupon_info: { result: 'GENUINE', value_paise: 10000 } });
+    await stubApi(page, { public_coupon_info: PUBLIC_ACTIVE });
     await page.goto(`/c/${CODE}`);
     await expect(page.getByText('Genuine 24M coupon')).toBeVisible();
     await axe(page);
@@ -46,10 +48,9 @@ test.describe('§17 accessibility: 0 axe violations (WCAG 2.2 AA)', () => {
     ['/', 'Scan coupon'],
     [`/c/${CODE}`, 'Valid coupon · ₹100'],
     ['/type', 'Type the code'],
-    ['/history', 'No coupons yet'],
-    ['/claims', 'No claims yet'],
-    ['/scan-many', 'Scan coupons one after another.'],
-    ['/login', 'Request new login link'],
+    ['/history', 'No coupons validated yet'],
+    ['/pin', 'Change PIN'],
+    ['/login', 'Registered mobile number'],
     ['/privacy', 'Privacy'],
   ] as const) {
     test(`dealer ${path}`, async ({ page }) => {
@@ -60,17 +61,17 @@ test.describe('§17 accessibility: 0 axe violations (WCAG 2.2 AA)', () => {
     });
   }
 
-  test('coupon with Paid and Declined buttons, and the receipt', async ({ page }) => {
+  test('coupon with the Validate button, then the validated result', async ({ page }) => {
     await dealer(page);
     await page.goto(`/c/${CODE}`);
-    await expect(page.getByRole('button', { name: 'Declined to pay' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Validate coupon' })).toBeVisible();
     await axe(page);
-    await page.getByRole('button', { name: 'Paid ₹100 to painter' }).click();
-    await expect(page.getByText('Redeemed ✓ ₹100')).toBeVisible();
+    await page.getByRole('button', { name: 'Validate coupon' }).click();
+    await expect(page.getByText('Validated ✓')).toBeVisible();
     await axe(page);
   });
 
-  test('Hindi and Marathi screens set the document language', async ({ page }) => {
+  test('Hindi and Kannada screens set the document language', async ({ page }) => {
     await dealer(page);
     await page.goto('/');
     await page.getByLabel('Language').selectOption('hi');
@@ -98,11 +99,11 @@ test.describe('§17 accessibility: 0 axe violations (WCAG 2.2 AA)', () => {
     }
   });
 
-  test('2.1.1 keyboard-only redeem', async ({ page }) => {
+  test('2.1.1 keyboard-only validate', async ({ page }) => {
     await dealer(page);
     await page.goto(`/c/${CODE}`);
     await expect(page.getByText('Valid coupon · ₹100')).toBeVisible();
-    const confirm = page.getByRole('button', { name: 'Paid ₹100 to painter' });
+    const confirm = page.getByRole('button', { name: 'Validate coupon' });
     for (
       let i = 0;
       i < 10 && !(await confirm.evaluate((el) => el === document.activeElement));
@@ -111,6 +112,6 @@ test.describe('§17 accessibility: 0 axe violations (WCAG 2.2 AA)', () => {
       await page.keyboard.press('Tab');
     await expect(confirm).toBeFocused();
     await page.keyboard.press('Enter');
-    await expect(page.getByText('Redeemed ✓ ₹100')).toBeVisible();
+    await expect(page.getByText('Validated ✓')).toBeVisible();
   });
 });

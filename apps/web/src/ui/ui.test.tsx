@@ -5,7 +5,6 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { I18nProvider } from '../lib/i18n/index.ts';
 
-import { QrSvg } from './QrBlock.tsx';
 import {
   Banner,
   Button,
@@ -127,17 +126,6 @@ describe('small components', () => {
     wrap(<LanguageSwitch />);
     await userEvent.selectOptions(screen.getByLabelText('Language'), 'hi');
     expect(await screen.findByLabelText('भाषा')).toBeInTheDocument();
-  });
-
-  it('QrSvg renders an accessible image of dark modules', () => {
-    const { container } = wrap(
-      <QrSvg
-        value="https://wa.me/919000000000?text=24M%20PAID%20K7Q2M9"
-        label="QR: 24M PAID K7Q2M9"
-      />,
-    );
-    expect(screen.getByRole('img', { name: 'QR: 24M PAID K7Q2M9' })).toBeInTheDocument();
-    expect(container.querySelectorAll('rect').length).toBeGreaterThan(100);
   });
 });
 

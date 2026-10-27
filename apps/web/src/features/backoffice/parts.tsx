@@ -100,10 +100,11 @@ export function cols(t: (k: Key) => string, keys: readonly string[]): Column<Row
 export interface FieldSpec {
   readonly name: string;
   readonly label: Key;
-  readonly type?: 'text' | 'number' | 'date' | 'email' | 'tel' | 'textarea';
+  readonly type?: 'text' | 'number' | 'date' | 'email' | 'tel' | 'textarea' | 'pin';
   readonly options?: readonly { value: string; label: string }[];
   readonly required?: boolean;
   readonly initial?: string;
+  readonly pattern?: string;
 }
 
 /** Small declarative form for back-office actions. Values are strings; the caller maps them. */
@@ -118,7 +119,6 @@ export function ActionForm({
   readonly onSubmit: (values: Record<string, string>) => unknown;
   readonly pending?: boolean;
 }): ReactNode {
-  const { t } = useI18n();
   const [values, setValues] = useState<Record<string, string>>(() =>
     Object.fromEntries(fields.map((f) => [f.name, f.initial ?? f.options?.[0]?.value ?? ''])),
   );
@@ -133,45 +133,68 @@ export function ActionForm({
         void onSubmit(Object.fromEntries(fields.map((f) => [f.name, effective(f, values)])));
       }}
     >
-      {fields.map((f) =>
-        f.options !== undefined ? (
-          <Select
-            key={f.name}
-            label={t(f.label)}
-            options={f.options}
-            value={effective(f, values)}
-            onChange={(val) => {
-              set(f.name, val);
-            }}
-          />
-        ) : f.type === 'textarea' ? (
-          <TextArea
-            key={f.name}
-            label={t(f.label)}
-            value={effective(f, values)}
-            onChange={(val) => {
-              set(f.name, val);
-            }}
-          />
-        ) : (
-          <Field
-            key={f.name}
-            label={t(f.label)}
-            type={f.type ?? 'text'}
-            required={f.required ?? true}
-            value={effective(f, values)}
-            onChange={(e) => {
-              set(f.name, e.target.value);
-            }}
-          />
-        ),
-      )}
+      {fields.map((f) => (
+        <FormField
+          key={f.name}
+          spec={f}
+          value={effective(f, values)}
+          onChange={(val) => {
+            set(f.name, val);
+          }}
+        />
+      ))}
       <div className="sm:col-span-2">
         <Button type="submit" loading={pending ?? false}>
           {submitLabel}
         </Button>
       </div>
     </form>
+  );
+}
+
+/** One input of an ActionForm: a select, a text area, a PIN box or a plain field. */
+function FormField({
+  spec: f,
+  value,
+  onChange,
+}: {
+  readonly spec: FieldSpec;
+  readonly value: string;
+  readonly onChange: (v: string) => void;
+}): ReactNode {
+  const { t } = useI18n();
+  if (f.options !== undefined)
+    return <Select label={t(f.label)} options={f.options} value={value} onChange={onChange} />;
+  if (f.type === 'textarea')
+    return <TextArea label={t(f.label)} value={value} onChange={onChange} />;
+  if (f.type === 'pin') {
+    return (
+      <Field
+        label={t(f.label)}
+        type="password"
+        inputMode="numeric"
+        autoComplete="off"
+        maxLength={4}
+        pattern="[0-9]{4}"
+        required={f.required ?? true}
+        value={value}
+        onChange={(e) => {
+          onChange(e.target.value.replace(/\D/g, ''));
+        }}
+      />
+    );
+  }
+  return (
+    <Field
+      label={t(f.label)}
+      type={f.type ?? 'text'}
+      required={f.required ?? true}
+      {...(f.pattern === undefined ? {} : { pattern: f.pattern })}
+      value={value}
+      onChange={(e) => {
+        onChange(e.target.value);
+      }}
+    />
   );
 }
 

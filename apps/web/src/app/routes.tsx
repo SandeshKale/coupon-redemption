@@ -8,20 +8,10 @@ import { Skeleton } from '../ui/index.ts';
 
 import { BackOfficeRoute, RoleGate } from './Gate.tsx';
 import { Shell } from './Shell.tsx';
-import {
-  AuthCallback,
-  BulkScanPage,
-  ClaimsPage,
-  HistoryPage,
-  LoginPage,
-  PrivacyPage,
-  ReceiptPage,
-  ScanPage,
-  StaffPage,
-} from './lazy.ts';
+import { HistoryPage, LoginPage, PinPage, PrivacyPage, ScanPage } from './lazy.ts';
 
 const DEALER = ['DEALER_OWNER', 'DEALER_STAFF'] as const;
-const OWNER = ['DEALER_OWNER'] as const;
+const PIN_USERS = ['DEALER_OWNER', 'DEALER_STAFF', 'DISTRIBUTOR'] as const;
 
 function L({ children }: { readonly children: ReactNode }): ReactNode {
   return <Suspense fallback={<Skeleton />}>{children}</Suspense>;
@@ -52,14 +42,6 @@ function publicRoutes(): ReactNode {
         }
       />
       <Route
-        path="auth/callback"
-        element={
-          <L>
-            <AuthCallback />
-          </L>
-        }
-      />
-      <Route
         path="privacy"
         element={
           <L>
@@ -74,31 +56,12 @@ function publicRoutes(): ReactNode {
 function dealerRoutes(): ReactNode {
   return (
     <>
-      <Route
-        index
-        element={<RoleGate roles={DEALER}>{(p) => <HomePage userRole={p.role} />}</RoleGate>}
-      />
+      <Route index element={<RoleGate roles={DEALER}>{() => <HomePage />}</RoleGate>} />
       <Route
         path="scan"
         element={
           <Gated roles={DEALER}>
             <ScanPage />
-          </Gated>
-        }
-      />
-      <Route
-        path="scan-many"
-        element={
-          <Gated roles={DEALER}>
-            <BulkScanPage />
-          </Gated>
-        }
-      />
-      <Route
-        path="receipt/:batchId"
-        element={
-          <Gated roles={DEALER}>
-            <ReceiptPage />
           </Gated>
         }
       />
@@ -111,23 +74,11 @@ function dealerRoutes(): ReactNode {
         }
       />
       <Route
-        path="claims"
+        path="pin"
         element={
-          <Gated roles={OWNER}>
-            <ClaimsPage />
+          <Gated roles={PIN_USERS}>
+            <PinPage />
           </Gated>
-        }
-      />
-      <Route
-        path="staff"
-        element={
-          <RoleGate roles={OWNER}>
-            {(p) => (
-              <L>
-                <StaffPage dealerId={p.dealer_id ?? 0} />
-              </L>
-            )}
-          </RoleGate>
         }
       />
     </>

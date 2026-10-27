@@ -124,3 +124,47 @@ export function num(row: Row, key: string): number {
   const val = row[key];
   return typeof val === 'number' ? val : Number(val ?? 0);
 }
+
+/** A query-shaped wrapper around rows already in memory, so tables can show them like fetched rows. */
+export function staticQuery(rows: Row[]): {
+  data: Row[];
+  error: null;
+  isLoading: false;
+  refetch: () => undefined;
+} {
+  return { data: rows, error: null, isLoading: false, refetch: () => undefined };
+}
+
+/** Calls an admin Edge Function (create login, change status) and reports the outcome. */
+export function useAdminCall(onDone: () => void): {
+  message: string | null;
+  error: boolean;
+  call: (fn: string, body: unknown, success?: string) => Promise<Row | null>;
+} {
+  const { t } = useI18n();
+  const { callFunction } = useServices();
+  const [state, setState] = useState<{ message: string; error: boolean } | null>(null);
+  return {
+    message: state?.message ?? null,
+    error: state?.error ?? false,
+    call: async (fn, body, success) => {
+      let ok = false;
+      let json: Row = {};
+      try {
+        const r = await callFunction(fn, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        ok = r.ok;
+        json = (await r.json().catch(() => ({}))) as Row;
+      } catch {
+        json = {};
+      }
+      const code = typeof json['error'] === 'string' ? json['error'] : t('common.error');
+      setState({ message: ok ? (success ?? t('common.done')) : code, error: !ok });
+      onDone();
+      return ok ? json : null;
+    },
+  };
+}

@@ -2,7 +2,7 @@
 export const COUPON_RESULTS = [
   'VALID',
   'REDEEMED',
-  'DECLINED',
+  'VALIDATED',
   'PARTIAL',
   'NONE_REDEEMED',
   'INVALID_FORMAT',
@@ -19,19 +19,6 @@ export const COUPON_RESULTS = [
   'BAD_REQUEST',
 ] as const;
 export type CouponResult = (typeof COUPON_RESULTS)[number];
-
-/** Results where the dealer must NOT hand over cash. */
-export const DO_NOT_PAY: ReadonlySet<CouponResult> = new Set([
-  'NOT_FOUND',
-  'NOT_ACTIVE',
-  'BLOCKED',
-  'EXPIRED',
-  'ALREADY_REDEEMED_OTHER',
-  'INVALID_FORMAT',
-  'DEALER_INACTIVE',
-  'TOO_MANY_INVALID',
-  'NONE_REDEEMED',
-]);
 
 export function isCouponResult(value: unknown): value is CouponResult {
   return typeof value === 'string' && (COUPON_RESULTS as readonly string[]).includes(value);

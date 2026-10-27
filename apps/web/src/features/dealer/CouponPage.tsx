@@ -1,8 +1,7 @@
 import { normaliseCode } from '@24m/shared';
 import { type ReactNode, useCallback, useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router';
+import { Link, useParams } from 'react-router';
 
-import { prefetchReceipt } from '../../app/lazy.ts';
 import type { ApiFailure } from '../../lib/api/client.ts';
 import { CheckResponse, PublicInfo } from '../../lib/api/schemas.ts';
 import { useI18n } from '../../lib/i18n/index.ts';
@@ -12,33 +11,32 @@ import { reportTiming } from '../../lib/telemetry.ts';
 import { Banner, Button, ResultCard, Skeleton } from '../../ui/index.ts';
 
 import { failureView, resultView } from './resultCopy.ts';
-import { useRedeem } from './useRedeem.ts';
+
+export const HOME_URL = 'https://www.24m.in';
 
 type View =
   | { kind: 'loading' }
   | { kind: 'local_invalid'; notOurs: boolean }
+  | { kind: 'public'; info: PublicInfo; code: string; dealersOnly: boolean }
   | { kind: 'checked'; data: CheckResponse; code: string }
-  | { kind: 'declined'; serial: string | undefined }
-  | {
-      kind: 'public';
-      result: 'GENUINE' | 'NOT_RECOGNISED' | 'INVALID_FORMAT' | 'RATE_LIMITED';
-      value: number;
-    }
+  | { kind: 'validated'; data: CheckResponse }
   | { kind: 'failed'; error: ApiFailure };
 
+const LINK =
+  'flex min-h-14 items-center justify-center rounded-btn border-2 border-border font-semibold';
+
 /**
- * /c/:code — what the phone camera opens (§4.1). Format and check character are validated on
- * the device first (no network for bad scans); then exactly one request.
+ * /c/:code: what the phone camera opens. Anyone sees whether the coupon is genuine and its
+ * status. A signed-in dealer also gets one action: Validate. Format and check character are
+ * checked on the device first (no network for bad scans).
  */
 export function CouponPage(): ReactNode {
   const params = useParams();
   const { api, session, config } = useServices();
   const i = useI18n();
   const net = useNetwork();
-  const navigate = useNavigate();
   const [view, setView] = useState<View>({ kind: 'loading' });
-  const { state, redeem, busy } = useRedeem();
-  const [declining, setDeclining] = useState(false);
+  const [busy, setBusy] = useState(false);
   const raw = params['code'] ?? '';
 
   const load = useCallback(async () => {
@@ -49,42 +47,40 @@ export function CouponPage(): ReactNode {
     }
     setView({ kind: 'loading' });
     const started = performance.now();
-    if ((await session.getToken()) === null) {
+    const publicView = async (dealersOnly: boolean): Promise<void> => {
       const r = await api.rpc('public_coupon_info', { p_code: local.code }, PublicInfo);
       setView(
         r.ok
-          ? { kind: 'public', result: r.data.result, value: r.data.value_paise ?? 0 }
+          ? { kind: 'public', info: r.data, code: local.code, dealersOnly }
           : { kind: 'failed', error: r.error },
       );
+    };
+    if ((await session.getToken()) === null) {
+      await publicView(false);
       return;
     }
     const r = await api.rpc('check_coupon', { p_code: local.code }, CheckResponse);
     reportTiming('scan_to_result', performance.now() - started);
-    if (r.ok && r.data.result === 'VALID') prefetchReceipt();
-    setView(
-      r.ok
-        ? { kind: 'checked', data: r.data, code: local.code }
-        : { kind: 'failed', error: r.error },
-    );
+    if (!r.ok && r.error.kind === 'auth') await publicView(false);
+    else if (!r.ok && r.error.kind === 'forbidden') await publicView(true);
+    else
+      setView(
+        r.ok
+          ? { kind: 'checked', data: r.data, code: local.code }
+          : { kind: 'failed', error: r.error },
+      );
   }, [api, session, raw, config.couponHost]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  const confirm = async (code: string): Promise<void> => {
-    const next = await redeem([code]);
-    if (next.phase === 'done' && next.response.batch_id !== undefined) {
-      void navigate(`/receipt/${next.response.batch_id}`, { state: next.response, replace: true });
-    }
-  };
-
-  const decline = async (code: string): Promise<void> => {
-    setDeclining(true);
-    const r = await api.rpc('decline_payment', { p_code: code }, CheckResponse);
-    setDeclining(false);
+  const validate = async (code: string): Promise<void> => {
+    setBusy(true);
+    const r = await api.rpc('validate_coupon', { p_code: code }, CheckResponse);
+    setBusy(false);
     if (!r.ok) setView({ kind: 'failed', error: r.error });
-    else if (r.data.result === 'DECLINED') setView({ kind: 'declined', serial: r.data.serial });
+    else if (r.data.result === 'VALIDATED') setView({ kind: 'validated', data: r.data });
     else setView({ kind: 'checked', data: r.data, code });
   };
 
@@ -94,35 +90,22 @@ export function CouponPage(): ReactNode {
       {net === 'slow' && view.kind === 'loading' ? (
         <Banner tone="info">{i.t('state.slow')}</Banner>
       ) : null}
-      <CouponBody
-        view={view}
-        busy={busy || declining}
-        redeemState={state}
-        onConfirm={confirm}
-        onDecline={decline}
-        onRetry={() => void load()}
-      />
+      <CouponBody view={view} busy={busy} onValidate={validate} onRetry={() => void load()} />
     </div>
   );
-}
-
-interface BodyProps {
-  readonly view: View;
-  readonly busy: boolean;
-  readonly redeemState: ReturnType<typeof useRedeem>['state'];
-  readonly onConfirm: (code: string) => Promise<void>;
-  readonly onDecline: (code: string) => Promise<void>;
-  readonly onRetry: () => void;
 }
 
 function CouponBody({
   view,
   busy,
-  redeemState,
-  onConfirm,
-  onDecline,
+  onValidate,
   onRetry,
-}: BodyProps): ReactNode {
+}: {
+  readonly view: View;
+  readonly busy: boolean;
+  readonly onValidate: (code: string) => Promise<void>;
+  readonly onRetry: () => void;
+}): ReactNode {
   const i = useI18n();
   switch (view.kind) {
     case 'loading':
@@ -137,22 +120,15 @@ function CouponBody({
         </ResultCard>
       );
     case 'public':
-      return <PublicResult result={view.result} value={view.value} />;
+      return <PublicResult view={view} />;
     case 'failed':
       return <FailedResult error={view.error} onRetry={onRetry} />;
+    case 'validated':
+      return <ValidatedResult data={view.data} />;
     case 'checked':
       return (
-        <CheckedResult
-          data={view.data}
-          code={view.code}
-          busy={busy}
-          redeemState={redeemState}
-          onConfirm={onConfirm}
-          onDecline={onDecline}
-        />
+        <CheckedResult data={view.data} code={view.code} busy={busy} onValidate={onValidate} />
       );
-    case 'declined':
-      return <DeclinedResult serial={view.serial} />;
   }
 }
 
@@ -169,12 +145,28 @@ function FailedResult({
     <>
       <ResultCard variant={f.variant} title={f.title} />
       {error.kind === 'auth' ? (
-        <LoginPrompt />
+        <LoginLink />
       ) : (
         <Button variant="secondary" onClick={onRetry}>
           {i.t('common.retry')}
         </Button>
       )}
+      <HomeLink />
+    </>
+  );
+}
+
+function ValidatedResult({ data }: { readonly data: CheckResponse }): ReactNode {
+  const i = useI18n();
+  return (
+    <>
+      <ResultCard variant="valid" title={i.t('result.validated')}>
+        {data.serial === undefined ? null : <p>{i.t('result.serial', { serial: data.serial })}</p>}
+      </ResultCard>
+      <Link to="/scan" className={LINK}>
+        {i.t('action.scanNext')}
+      </Link>
+      <HomeLink />
     </>
   );
 }
@@ -183,101 +175,89 @@ function CheckedResult({
   data,
   code,
   busy,
-  redeemState,
-  onConfirm,
-  onDecline,
-}: Omit<BodyProps, 'view' | 'onRetry'> & {
+  onValidate,
+}: {
   readonly data: CheckResponse;
   readonly code: string;
+  readonly busy: boolean;
+  readonly onValidate: (code: string) => Promise<void>;
 }): ReactNode {
   const i = useI18n();
   const r = resultView(data.result, data, i);
-  const redeemFailed = redeemState.phase === 'failed' || redeemState.phase === 'not_redeemed';
-  const busyTitle = i.t(redeemState.phase === 'checking' ? 'state.checkingResult' : 'state.saving');
   return (
     <>
-      <ResultCard variant={busy ? 'checking' : r.variant} title={busy ? busyTitle : r.title}>
+      <ResultCard variant={r.variant} title={r.title}>
         {data.serial === undefined ? null : <p>{i.t('result.serial', { serial: data.serial })}</p>}
         {typeof data.product === 'string' ? <p>{data.product}</p> : null}
-        {r.variant === 'invalid' ? (
-          <p className="mt-2 text-xl font-bold text-danger">{i.t('result.do_not_pay')}</p>
-        ) : null}
+        {r.canValidate ? <p className="font-semibold">{i.t('public.state.ACTIVE')}</p> : null}
       </ResultCard>
-      {redeemFailed ? <ResultCard variant="warning" title={i.t('state.notRedeemed')} /> : null}
-      {r.payable ? (
-        <div className="sticky bottom-0 flex flex-col gap-3 bg-surface pb-4">
-          <Button size="lg" loading={busy} onClick={() => void onConfirm(code)}>
-            {i.t('action.confirm', { amount: i.money(data.value_paise ?? 0) })}
-          </Button>
-          <Button size="lg" variant="secondary" loading={busy} onClick={() => void onDecline(code)}>
-            {i.t('action.decline')}
+      {r.canValidate ? (
+        <div className="sticky bottom-0 bg-surface pb-4">
+          <Button size="lg" loading={busy} onClick={() => void onValidate(code)}>
+            {i.t('action.validate')}
           </Button>
         </div>
       ) : (
-        <Link
-          to="/scan"
-          className="flex min-h-14 items-center justify-center rounded-btn border-2 border-border font-semibold"
-        >
+        <Link to="/scan" className={LINK}>
           {i.t('action.scanNext')}
         </Link>
       )}
+      <HomeLink />
     </>
   );
 }
 
-function DeclinedResult({ serial }: { readonly serial: string | undefined }): ReactNode {
+function PublicResult({ view }: { readonly view: Extract<View, { kind: 'public' }> }): ReactNode {
   const i = useI18n();
+  const { info, code, dealersOnly } = view;
+  const genuine = info.result === 'GENUINE';
+  const state = info.state ?? 'ACTIVE';
+  const title = genuine
+    ? i.t('public.genuine', { amount: i.money(info.value_paise ?? 0) })
+    : info.result === 'RATE_LIMITED'
+      ? i.t('public.rateLimited')
+      : i.t('public.notRecognised');
+  const variant = !genuine
+    ? info.result === 'RATE_LIMITED'
+      ? 'warning'
+      : 'invalid'
+    : state === 'ACTIVE'
+      ? 'valid'
+      : state === 'VALIDATED'
+        ? 'warning'
+        : 'invalid';
   return (
     <>
-      <ResultCard variant="warning" title={i.t('result.declined')}>
-        {serial === undefined ? null : <p>{i.t('result.serial', { serial })}</p>}
+      <ResultCard variant={variant} title={title}>
+        {genuine ? <p className="font-semibold">{i.t(`public.state.${state}`)}</p> : null}
       </ResultCard>
-      <Link
-        to="/scan"
-        className="flex min-h-14 items-center justify-center rounded-btn border-2 border-border font-semibold"
-      >
-        {i.t('action.scanNext')}
-      </Link>
+      {dealersOnly ? <p>{i.t('public.dealersOnly')}</p> : <LoginLink code={code} />}
+      <HomeLink />
     </>
   );
 }
 
-function PublicResult({
-  result,
-  value,
-}: {
-  readonly result: string;
-  readonly value: number;
-}): ReactNode {
-  const i = useI18n();
-  const title =
-    result === 'GENUINE'
-      ? i.t('public.genuine', { amount: i.money(value) })
-      : result === 'RATE_LIMITED'
-        ? i.t('public.rateLimited')
-        : i.t('public.notRecognised');
-  return (
-    <>
-      <ResultCard
-        variant={result === 'GENUINE' ? 'valid' : result === 'RATE_LIMITED' ? 'warning' : 'invalid'}
-        title={title}
-      />
-      <LoginPrompt />
-    </>
-  );
-}
-
-function LoginPrompt(): ReactNode {
+function LoginLink({ code }: { readonly code?: string }): ReactNode {
   const { t } = useI18n();
+  const next = code === undefined ? '' : `?next=${encodeURIComponent(`/c/${code}`)}`;
   return (
     <div className="flex flex-col gap-2">
       <Link
-        to="/login"
+        to={`/login${next}`}
         className="flex min-h-14 items-center justify-center rounded-btn bg-success font-semibold text-white"
       >
-        {t('public.dealerLogin')}
+        {t('public.login')}
       </Link>
       <p className="text-sm text-muted">{t('auth.openInChrome')}</p>
     </div>
+  );
+}
+
+function HomeLink(): ReactNode {
+  const { t } = useI18n();
+  return (
+    <a href={HOME_URL} rel="noopener" className={LINK}>
+      {t('public.home')}
+    </a>
   );
 }

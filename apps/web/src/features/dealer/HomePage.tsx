@@ -4,7 +4,7 @@ import { Link, useNavigate } from 'react-router';
 import { DealerHome } from '../../lib/api/schemas.ts';
 import { useI18n } from '../../lib/i18n/index.ts';
 import { useServices } from '../../lib/services.ts';
-import { Button, ErrorState, Money, Skeleton } from '../../ui/index.ts';
+import { Button, ErrorState, Skeleton } from '../../ui/index.ts';
 
 const CACHE_KEY = '24m.home';
 const BIG =
@@ -20,7 +20,7 @@ function readCache(): DealerHome | null {
   }
 }
 
-/** Totals from dealer_home, cached for offline use with a "last updated" time. */
+/** Counts from dealer_home, cached for offline use with a "last updated" time. */
 function useHome(): {
   home: DealerHome | null;
   stale: boolean;
@@ -47,8 +47,8 @@ function useHome(): {
   return { home, stale: failed, failed, reload: () => void load() };
 }
 
-/** Home: Scan / Scan many / Type code + today and month totals. */
-export function HomePage({ userRole }: { readonly userRole: string }): ReactNode {
+/** Home: Scan / Type code + validated today and this month. */
+export function HomePage(): ReactNode {
   const i = useI18n();
   const { home, stale, failed, reload } = useHome();
   return (
@@ -63,9 +63,6 @@ export function HomePage({ userRole }: { readonly userRole: string }): ReactNode
         >
           {i.t('home.scan')}
         </Link>
-        <Link to="/scan-many" className={BIG}>
-          {i.t('home.scanMany')}
-        </Link>
         <Link to="/type" className={BIG}>
           {i.t('home.type')}
         </Link>
@@ -78,8 +75,8 @@ export function HomePage({ userRole }: { readonly userRole: string }): ReactNode
         )
       ) : (
         <section className="grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-3">
-          <Totals label={i.t('home.today')} count={home.today_count} paise={home.today_paise} />
-          <Totals label={i.t('home.month')} count={home.month_count} paise={home.month_paise} />
+          <Totals label={i.t('home.today')} count={home.today_count} />
+          <Totals label={i.t('home.month')} count={home.month_count} />
           {stale ? (
             <p className="col-span-full text-sm text-muted">
               {i.t('common.lastUpdated', { time: i.dateTime(home.as_of) })}
@@ -87,12 +84,12 @@ export function HomePage({ userRole }: { readonly userRole: string }): ReactNode
           ) : null}
         </section>
       )}
-      <DealerNav owner={userRole === 'DEALER_OWNER'} />
+      <DealerNav />
     </div>
   );
 }
 
-function DealerNav({ owner }: { readonly owner: boolean }): ReactNode {
+function DealerNav(): ReactNode {
   const i = useI18n();
   const { signOut } = useServices();
   const navigate = useNavigate();
@@ -101,16 +98,9 @@ function DealerNav({ owner }: { readonly owner: boolean }): ReactNode {
       <Link to="/history" className={NAV}>
         {i.t('nav.history')}
       </Link>
-      {owner ? (
-        <>
-          <Link to="/claims" className={NAV}>
-            {i.t('nav.claims')}
-          </Link>
-          <Link to="/staff" className={NAV}>
-            {i.t('nav.staff')}
-          </Link>
-        </>
-      ) : null}
+      <Link to="/pin" className={NAV}>
+        {i.t('nav.pin')}
+      </Link>
       <Button
         variant="ghost"
         onClick={() => {
@@ -123,23 +113,12 @@ function DealerNav({ owner }: { readonly owner: boolean }): ReactNode {
   );
 }
 
-function Totals({
-  label,
-  count,
-  paise,
-}: {
-  readonly label: string;
-  readonly count: number;
-  readonly paise: number;
-}): ReactNode {
+function Totals({ label, count }: { readonly label: string; readonly count: number }): ReactNode {
   const { t } = useI18n();
   return (
     <div className="min-w-0 rounded-card bg-surface-2 p-4 break-words">
       <h2 className="text-muted">{label}</h2>
-      <p className="text-2xl font-bold">
-        <Money paise={paise} />
-      </p>
-      <p>{t('home.coupons', { count })}</p>
+      <p className="text-2xl font-bold">{t('home.validated', { count })}</p>
     </div>
   );
 }

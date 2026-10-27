@@ -1,11 +1,9 @@
-import { type ReactNode, useEffect, useState } from 'react';
-import { Link, Outlet, useLocation, useNavigate } from 'react-router';
+import type { ReactNode } from 'react';
+import { Link, Outlet, useLocation } from 'react-router';
 
-import { hasPending, resolvePending } from '../lib/api/redeem.ts';
 import { useI18n } from '../lib/i18n/index.ts';
 import { useNetwork } from '../lib/network/status.ts';
-import { useServices } from '../lib/services.ts';
-import { Banner, HelpLink, LanguageSwitch, ResultCard } from '../ui/index.ts';
+import { Banner, HelpLink, LanguageSwitch } from '../ui/index.ts';
 
 import { UpdateBanner } from './UpdateBanner.tsx';
 
@@ -36,9 +34,7 @@ export function Shell({ helpline }: { readonly helpline: string | null }): React
       {net === 'offline' ? <Banner tone="warning">{t('state.offline')}</Banner> : null}
       <UpdateBanner />
       <main id="content" className="py-4">
-        <PendingRedeemGate>
-          <Outlet />
-        </PendingRedeemGate>
+        <Outlet />
       </main>
       <footer className="py-6 text-center text-sm text-muted">
         <Link to="/privacy" className="underline">
@@ -46,34 +42,5 @@ export function Shell({ helpline }: { readonly helpline: string | null }): React
         </Link>
       </footer>
     </div>
-  );
-}
-
-/** EC-044: if the app was closed during "Checking…", resolve that first, before anything else. */
-function PendingRedeemGate({ children }: { readonly children: ReactNode }): ReactNode {
-  const { redeemDeps } = useServices();
-  const { t } = useI18n();
-  const navigate = useNavigate();
-  const [state, setState] = useState<'checking' | 'none' | 'not_redeemed'>(() =>
-    hasPending(redeemDeps.storage) ? 'checking' : 'none',
-  );
-  useEffect(() => {
-    if (state !== 'checking') return;
-    void resolvePending(redeemDeps).then((out) => {
-      if (out.kind === 'done' && out.response.batch_id !== undefined) {
-        setState('none');
-        void navigate(`/receipt/${out.response.batch_id}`, { state: out.response, replace: true });
-      } else setState(out.kind === 'not_redeemed' ? 'not_redeemed' : 'none');
-    });
-  }, [navigate, redeemDeps, state]);
-  if (state === 'checking')
-    return <ResultCard variant="checking" title={t('state.checkingResult')} />;
-  return (
-    <>
-      {state === 'not_redeemed' ? (
-        <ResultCard variant="warning" title={t('state.notRedeemed')} />
-      ) : null}
-      {children}
-    </>
   );
 }

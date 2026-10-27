@@ -4,17 +4,16 @@ import { http, HttpResponse } from 'msw';
 import { MemoryRouter } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 
-import { PENDING_KEY } from '../lib/api/redeem.ts';
 import { I18nProvider } from '../lib/i18n/index.ts';
 import { ServicesContext } from '../lib/services.ts';
-import { HOME, PROFILE, REDEEMED } from '../test/fixtures.ts';
+import { HOME, PROFILE, STATS } from '../test/fixtures.ts';
 import { renderAt, signIn, testServices } from '../test/render.tsx';
 import { API, rest, rpc, server } from '../test/server.ts';
 
 import { RoleGate, useProfile } from './Gate.tsx';
 import { PrivacyPage } from './PrivacyPage.tsx';
 import { notifyUpdate, UpdateBanner } from './UpdateBanner.tsx';
-import { prefetchDealerRoutes, prefetchReceipt } from './lazy.ts';
+import { prefetchDealerRoutes } from './lazy.ts';
 import { AppRoutes } from './routes.tsx';
 
 function app(route: string) {
@@ -37,19 +36,28 @@ describe('routing and gates', () => {
     expect(screen.getByLabelText('Language')).toBeInTheDocument();
   });
 
-  it('dealer home; owner-only routes; unknown routes go home', async () => {
+  it('a dealer cannot open the back office', async () => {
     signIn();
     rest({ app_user: PROFILE('DEALER_STAFF') });
     rpc({ dealer_home: HOME });
-    app('/claims');
+    app('/m');
     expect(await screen.findByText('You do not have permission for this.')).toBeInTheDocument();
+  });
+
+  it('the old claim and staff pages are gone: they land on home', async () => {
+    signIn();
+    rest({ app_user: PROFILE('DEALER_OWNER') });
+    rpc({ dealer_home: HOME });
+    app('/claims');
+    expect(await screen.findByText('Namaste, Owner A')).toBeInTheDocument();
   });
 
   it('distributors and 24M are routed to their back-office', async () => {
     signIn();
-    rest({ app_user: PROFILE('DISTRIBUTOR'), dealer_claim: [] });
+    rest({ app_user: PROFILE('DISTRIBUTOR') });
+    rpc({ list_dealers: [] });
     app('/');
-    expect(await screen.findByRole('heading', { name: 'Claims to validate' })).toBeInTheDocument();
+    expect((await screen.findAllByRole('heading', { name: 'Dealers' })).length).toBeGreaterThan(0);
   });
 
   it('24M without MFA is sent to login', async () => {
@@ -59,11 +67,12 @@ describe('routing and gates', () => {
     expect(await screen.findByRole('heading', { name: 'Log in' })).toBeInTheDocument();
   });
 
-  it('24M admin lands on the weekly review', async () => {
+  it('24M admin lands on the dashboard', async () => {
     signIn('u', 'aal2');
     rest({ app_user: PROFILE('M24_ADMIN') });
+    rpc({ coupon_stats: STATS });
     app('/');
-    expect(await screen.findByRole('heading', { name: 'Weekly review' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Dashboard' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Skip to content' })).toBeInTheDocument();
   });
 
@@ -76,29 +85,25 @@ describe('routing and gates', () => {
 
   it('every lazy dealer route renders', async () => {
     signIn();
-    rest({ app_user: PROFILE('DEALER_OWNER'), app_user_staff: [] });
-    rpc({
-      dealer_home: HOME,
-      my_batches: [],
-      my_claims: [],
-      batch_status: { batch_id: 1, status: 'NONE', count: 1, value_paise: 1 },
-    });
+    rest({ app_user: PROFILE('DEALER_OWNER') });
+    rpc({ dealer_home: HOME, my_validations: [] });
     for (const [route, heading] of [
-      ['/history', 'My coupons'],
-      ['/claims', 'My claims'],
-      ['/staff', 'Staff'],
+      ['/history', 'My validations'],
+      ['/pin', 'Change PIN'],
       ['/scan', 'Scan coupon'],
-      ['/scan-many', 'Scan many'],
       ['/type', 'Type the code'],
     ] as const) {
       const r = app(route);
       expect(await screen.findByRole('heading', { name: heading })).toBeInTheDocument();
       r.unmount();
     }
-    const r = app('/receipt/1');
-    expect(await screen.findByRole('link', { name: 'Scan next coupon' })).toBeInTheDocument();
-    r.unmount();
-    app('/auth/callback');
+  });
+
+  it('distributors can change their PIN too', async () => {
+    signIn();
+    rest({ app_user: PROFILE('DISTRIBUTOR') });
+    app('/pin');
+    expect(await screen.findByRole('heading', { name: 'Change PIN' })).toBeInTheDocument();
   });
 
   it('useProfile and RoleGate states', async () => {
@@ -115,40 +120,18 @@ describe('routing and gates', () => {
 });
 
 describe('Shell', () => {
-  it('EC-044 resolves a redemption left pending when the app was closed', async () => {
-    signIn();
-    localStorage.setItem(PENDING_KEY, JSON.stringify({ key: 'k1', codes: ['X'], at: 1 }));
-    rpc({
-      redemption_outcome: { found: true, response: REDEEMED },
-      dealer_home: HOME,
-      batch_status: { batch_id: 42, status: 'CONFIRMED', count: 1, value_paise: 10000 },
-    });
-    rest({ app_user: PROFILE('DEALER_OWNER') });
-    app('/');
-    expect(await screen.findByText('Redeemed ✓ ₹100')).toBeInTheDocument();
-    expect(localStorage.getItem(PENDING_KEY)).toBeNull();
-  });
-
-  it('EC-043 pending redemption the server never saw', async () => {
-    signIn();
-    localStorage.setItem(PENDING_KEY, JSON.stringify({ key: 'k1', codes: ['X'], at: 1 }));
-    rpc({ redemption_outcome: { found: false } });
-    rest({ app_user: PROFILE('DEALER_OWNER') });
-    rpc({ redemption_outcome: { found: false }, dealer_home: HOME });
-    app('/');
-    expect(await screen.findByText('Not redeemed. Try again.')).toBeInTheDocument();
-  });
-
   it('offline banner', async () => {
     const spy = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
     app('/privacy');
-    expect(await screen.findAllByText('No internet. Don’t pay yet.')).not.toHaveLength(0);
+    expect(
+      await screen.findAllByText('No internet. Try again when you are online.'),
+    ).not.toHaveLength(0);
     spy.mockRestore();
   });
 });
 
 describe('UpdateBanner (EC-055)', () => {
-  it('appears when a new version waits and applies on request, but not mid-redeem', async () => {
+  it('appears when a new version waits and applies on request', async () => {
     const apply = vi.fn(() => Promise.resolve());
     render(
       <I18nProvider lang="en">
@@ -161,13 +144,6 @@ describe('UpdateBanner (EC-055)', () => {
     });
     await userEvent.click(screen.getByRole('button', { name: 'Update now' }));
     expect(apply).toHaveBeenCalled();
-    localStorage.setItem(PENDING_KEY, '{}');
-    render(
-      <I18nProvider lang="en">
-        <UpdateBanner />
-      </I18nProvider>,
-    );
-    expect(screen.getAllByRole('button', { name: 'Update now' })[1]).toBeDisabled();
   });
 });
 
@@ -179,7 +155,6 @@ describe('misc', () => {
       </I18nProvider>,
     );
     expect(screen.getByText(/do not collect painters’ phone numbers/)).toBeInTheDocument();
-    prefetchReceipt();
     const setTimeout = vi.fn((cb: () => void) => (cb(), 1));
     prefetchDealerRoutes({ navigator: {}, setTimeout } as unknown as Window);
     expect(setTimeout).toHaveBeenCalled();

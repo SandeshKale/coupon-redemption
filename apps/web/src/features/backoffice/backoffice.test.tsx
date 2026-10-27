@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { describe, expect, it, vi } from 'vitest';
 
-import { PROFILE } from '../../test/fixtures.ts';
+import { PROFILE, STATS } from '../../test/fixtures.ts';
 import { renderAt, signIn } from '../../test/render.tsx';
 import { API, err, rest, rpc, server } from '../../test/server.ts';
 
@@ -31,11 +31,6 @@ function captureFunctions(): Record<string, unknown[]> {
       }
       (calls[fn] ??= []).push(body);
       if (fn === 'admin-create-user') return HttpResponse.json({ user_id: 50 }, { status: 201 });
-      if (fn === 'admin-login-link')
-        return HttpResponse.json({
-          link: 'https://x',
-          whatsapp_url: 'https://wa.me/919800000001?text=hi',
-        });
       if (fn === 'export-print-file')
         return new HttpResponse('serial,code13\r\n', { headers: { 'content-type': 'text/csv' } });
       if (fn === 'bulk-upload') return HttpResponse.json({ ok: true, rows: 1, committed: false });
@@ -45,341 +40,264 @@ function captureFunctions(): Record<string, unknown[]> {
   return calls;
 }
 
-const LINES = [
+const DEALERS = [
   {
-    line_id: 1,
-    coupon_id: 11,
-    serial: 'P24-0000001',
-    value_paise: 10000,
-    redeemed_at: '2026-10-20T10:00:00Z',
-    coupon_status: 'REDEEMED',
-    line_status: 'PENDING',
-    failures: [],
+    id: 1,
+    code: 'DL00001',
+    name: 'Shree Ganesh Paints',
+    gst: '27AAAPL1234C1Z5',
+    mobile_e164: '+919700000001',
+    status: 'ACTIVE',
+    distributor_id: 1,
+    distributor: 'Pune',
+    user_id: 21,
+    user_status: 'ACTIVE',
+    validated: 5,
   },
   {
-    line_id: 2,
-    coupon_id: 12,
-    serial: 'P24-0000002',
-    value_paise: 10000,
-    redeemed_at: '2026-10-20T10:00:00Z',
-    coupon_status: 'ON_HOLD',
-    line_status: 'PENDING',
-    failures: ['R2-05'],
+    id: 2,
+    code: 'DL00002',
+    name: 'Sai Hardware',
+    gst: null,
+    mobile_e164: '+919700000002',
+    status: 'ACTIVE',
+    distributor_id: 1,
+    distributor: 'Pune',
+    user_id: 22,
+    user_status: 'INACTIVE',
+    validated: 0,
   },
   {
-    line_id: 3,
-    coupon_id: 13,
-    serial: 'P24-0000003',
-    value_paise: 10000,
-    redeemed_at: '2026-10-20T10:00:00Z',
-    coupon_status: 'REDEEMED',
-    line_status: 'APPROVED',
-    failures: [],
+    id: 3,
+    code: 'DL00003',
+    name: 'No Login Yet',
+    gst: null,
+    mobile_e164: '+919700000003',
+    status: 'ACTIVE',
+    distributor_id: 1,
+    distributor: 'Pune',
+    user_id: null,
+    user_status: null,
+    validated: 0,
   },
 ];
 
-describe('distributor', () => {
-  it('queue lists submitted claims and opens a slip', async () => {
-    signIn();
-    rest({
-      dealer_claim: [
-        {
-          id: 7,
-          status: 'SUBMITTED',
-          submitted_at: '2026-10-01T05:00:00Z',
-          dealer: { name: 'Shree Ganesh Paints', code: 'DLR-001' },
-        },
-      ],
-    });
-    rpc({ get_claim_by_slip: { kind: 'DEALER', claim_id: 7 } });
-    open('DISTRIBUTOR', '/d');
-    expect(await screen.findByRole('link', { name: '#7' })).toHaveAttribute('href', '/d/claim/7');
-    expect(screen.getByText('Shree Ganesh Paints')).toBeInTheDocument();
-    await userEvent.type(screen.getByLabelText('Slip code'), 'abc');
-    await userEvent.click(screen.getByRole('button', { name: 'Open claim slip' }));
-    expect(await screen.findByRole('link', { name: /Claim #7/ })).toHaveAttribute(
-      'href',
-      '/d/claim/7',
-    );
-  });
-
-  it('slip that is not ours', async () => {
-    signIn();
-    rpc({ get_claim_by_slip: err(409, 'NOT_FOUND') });
-    open('DISTRIBUTOR', '/d/slip/zzz');
-    expect(await screen.findByText('You do not have permission for this.')).toBeInTheDocument();
-  });
-
-  it('claim detail: rule results per line, decisions, close with CN, notify dealer', async () => {
-    signIn();
-    const decisions: unknown[] = [];
-    rpc({
-      dealer_claim_detail: {
-        claim: { id: 7, status: 'SUBMITTED', dealer: { name: 'Shree Ganesh Paints' } },
-        lines: LINES,
-      },
-      dist_decide: (a) => (decisions.push(a), { decided: 1, lines: [] }),
-      dist_close_claim: {
-        claim_id: 7,
-        count: 1,
-        total_paise: 10000,
-        moved: 0,
-        dealer_mobile: '+919700000001',
-      },
-    });
-    open('DISTRIBUTOR', '/d/claim/7');
-    expect(await screen.findByText('On hold at 24M')).toBeInTheDocument();
-    expect(screen.getByText('Total ₹100 for 1 coupons')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Approve all eligible' }));
-    await userEvent.selectOptions(screen.getByLabelText('Choose a reason'), 'SUSPECTED_FRAUD');
-    const row = screen.getByText('P24-0000002').closest('tr')!;
-    await userEvent.click(within(row).getByRole('button', { name: 'Reject' }));
-    await userEvent.click(within(row).getByRole('button', { name: 'Hold' }));
-    await userEvent.click(within(row).getByRole('button', { name: 'Approve' }));
-    row.focus();
-    await userEvent.keyboard('a');
-    await userEvent.keyboard('r');
-    await waitFor(() => {
-      expect(decisions).toHaveLength(6);
-    });
-    expect(decisions[0]).toMatchObject({
-      p_coupon_ids: null,
-      p_decision: 'APPROVE',
-      p_reason: null,
-    });
-    expect(decisions[1]).toMatchObject({
-      p_coupon_ids: [12],
-      p_decision: 'REJECT',
-      p_reason: 'SUSPECTED_FRAUD',
-    });
-    await userEvent.click(screen.getByRole('button', { name: 'Close with CN' }));
-    const dialog = screen.getByRole('dialog');
-    await userEvent.type(within(dialog).getByLabelText('CN number'), 'CN-77');
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Close with CN' }));
-    const notify = await screen.findByRole('link', { name: 'Notify dealer on WhatsApp' });
-    expect(notify.getAttribute('href')).toMatch(/^https:\/\/wa\.me\/919700000001\?text=.*CN-77/);
-  });
-
-  it('claim detail errors and a closed claim', async () => {
-    signIn();
-    rpc({
-      dealer_claim_detail: { claim: { id: 7, status: 'CN_ISSUED', dealer: {} }, lines: [] },
-      dist_decide: err(409, 'CLAIM_NOT_SUBMITTED'),
-    });
-    open('DISTRIBUTOR', '/d/claim/7');
-    expect(await screen.findByRole('button', { name: 'Close with CN' })).toBeDisabled();
-    await userEvent.click(screen.getByRole('button', { name: 'Approve all eligible' }));
-    expect(await screen.findByText('CLAIM_NOT_SUBMITTED')).toBeInTheDocument();
-  });
-
-  it('claim detail load failure', async () => {
-    signIn();
-    rpc({ dealer_claim_detail: err(500, 'x') });
-    open('DISTRIBUTOR', '/d/claim/7');
-    expect(await screen.findByRole('alert', {}, { timeout: 5000 })).toBeInTheDocument();
-  });
-
-  it('claim to 24M', async () => {
-    signIn();
-    rest({
-      dist_claim: [
-        {
-          id: 3,
-          status: 'SUBMITTED',
-          created_at: '2026-10-01T05:00:00Z',
-          total_paise: 30000,
-          cn_no: null,
-          slip_token: 'tok',
-        },
-      ],
-    });
-    rpc({
-      distributor_todo: { cn_ready_to_claim: 4 },
-      create_dist_claim: { claim_id: 4, count: 4, total_paise: 40000 },
-    });
-    open('DISTRIBUTOR', '/d/claims');
-    await userEvent.click(await screen.findByRole('button', { name: 'Create claim to 24M' }));
-    expect(await screen.findByText(/claim_id: 4/)).toBeInTheDocument();
-    expect(screen.getByText('₹300')).toBeInTheDocument();
-  });
-
-  it('dealers: requests, links, new logins and new dealers', async () => {
+describe('distributor and sales rep: dealers', () => {
+  it('lists dealers and adds one with a PIN; GST is optional', async () => {
     signIn();
     const calls = captureFunctions();
-    rest({
-      dealer: [
-        {
-          id: 1,
-          code: 'DLR-001',
-          name: 'Shree Ganesh Paints',
-          mobile_e164: '+919700000001',
-          city: 'Pune',
-          status: 'ACTIVE',
-        },
-      ],
-      app_user: [
-        {
-          id: 2,
-          name: 'Staff A',
-          mobile_e164: '+919800000002',
-          role: 'DEALER_STAFF',
-          status: 'ACTIVE',
-          dealer_id: 1,
-        },
-      ],
-      user_request: [
-        {
-          id: 5,
-          kind: 'NEW_STAFF',
-          name: 'Ravi',
-          mobile_e164: '+919812300000',
-          dealer_id: 1,
-          target_user_id: null,
-          status: 'PENDING',
-        },
-        {
-          id: 6,
-          kind: 'LOGIN_LINK',
-          name: 'Staff A',
-          mobile_e164: '+919800000002',
-          dealer_id: 1,
-          target_user_id: 2,
-          status: 'PENDING',
-        },
-      ],
-    });
-    rpc({ reject_user_request: null, upsert_dealer: 21 });
-    open('DISTRIBUTOR', '/d/dealers');
-    const ravi = (await screen.findByText('Ravi')).closest('tr')!;
-    await userEvent.click(within(ravi).getByRole('button', { name: 'Create login' }));
-    expect(await screen.findByRole('link', { name: 'Open WhatsApp' })).toHaveAttribute(
-      'href',
-      'https://wa.me/919800000001?text=hi',
+    rpc({ list_dealers: DEALERS });
+    open('DISTRIBUTOR', '/d');
+    expect(await screen.findByText('Shree Ganesh Paints')).toBeInTheDocument();
+    expect(screen.getByText('27AAAPL1234C1Z5')).toBeInTheDocument();
+    const add = screen.getByRole('heading', { name: 'Add dealer' }).closest('section')!;
+    await userEvent.type(within(add).getByLabelText('Dealer name'), 'Om Paints');
+    await userEvent.type(
+      within(add).getByLabelText('Dealer WhatsApp mobile number (this is the login)'),
+      '98222 00001',
     );
-    expect(calls['admin-create-user']?.[0]).toMatchObject({
-      name: 'Ravi',
-      role: 'DEALER_STAFF',
-      dealer_id: 1,
-      request_id: 5,
-    });
-    const link = screen.getAllByText('Staff A')[0]!.closest('tr')!;
-    await userEvent.click(within(link).getByRole('button', { name: 'Send login link' }));
-    await userEvent.click(within(link).getByRole('button', { name: 'Reject' }));
-    const addDealer = screen.getByRole('heading', { name: 'Add dealer' }).closest('section')!;
-    await userEvent.type(within(addDealer).getByLabelText('Code'), 'DLR-099');
-    await userEvent.type(within(addDealer).getByLabelText('Name'), 'New Shop');
-    await userEvent.type(within(addDealer).getByLabelText('Mobile'), '9700000099');
-    await userEvent.click(within(addDealer).getByRole('button', { name: 'Add dealer' }));
-    const addUser = screen
-      .getAllByRole('heading', { name: 'Create login' })
-      .at(-1)!
-      .closest('section')!;
-    await userEvent.type(within(addUser).getByLabelText('Name'), 'Owner Z');
-    await userEvent.type(within(addUser).getByLabelText('Mobile'), '9700000098');
-    await userEvent.click(within(addUser).getByRole('button', { name: 'Create login' }));
-    await waitFor(() => {
-      expect(calls['admin-create-user']).toHaveLength(2);
-    });
-    expect(calls['admin-login-link']?.length).toBeGreaterThanOrEqual(2);
+    await userEvent.type(within(add).getByLabelText('4-digit PIN'), '24x68');
+    await userEvent.click(within(add).getByRole('button', { name: 'Add dealer' }));
+    expect(
+      await screen.findByText('Dealer added. They log in with their mobile number and this PIN.'),
+    ).toBeInTheDocument();
+    expect(calls['admin-create-user']).toEqual([
+      {
+        name: 'Om Paints',
+        mobile: '+919822200001',
+        role: 'DEALER_OWNER',
+        parent_distributor_id: 1,
+        pin: '2468',
+      },
+    ]);
   });
 
-  it('dealers: login failures are shown', async () => {
+  it('sends the GST number when given', async () => {
+    signIn();
+    const calls = captureFunctions();
+    rpc({ list_dealers: [] });
+    open('DISTRIBUTOR', '/d');
+    const add = (await screen.findByRole('heading', { name: 'Add dealer' })).closest('section')!;
+    await userEvent.type(within(add).getByLabelText('Dealer name'), 'Om Paints');
+    await userEvent.type(within(add).getByLabelText('GST number (optional)'), '27AAAPL1234C1Z5');
+    await userEvent.type(
+      within(add).getByLabelText('Dealer WhatsApp mobile number (this is the login)'),
+      '9822200001',
+    );
+    await userEvent.type(within(add).getByLabelText('4-digit PIN'), '2468');
+    await userEvent.click(within(add).getByRole('button', { name: 'Add dealer' }));
+    await waitFor(() => {
+      expect(calls['admin-create-user']).toEqual([
+        expect.objectContaining({ gst: '27AAAPL1234C1Z5' }),
+      ]);
+    });
+  });
+
+  it('shows the reason when a dealer cannot be added', async () => {
     signIn();
     server.use(
       http.post(`${API}/functions/v1/admin-create-user`, () =>
         HttpResponse.json({ error: 'DUPLICATE_MOBILE' }, { status: 409 }),
       ),
     );
-    rest({ dealer: [{ id: 1, code: 'D', name: 'Shop' }], user_request: [], app_user: [] });
-    open('DISTRIBUTOR', '/d/dealers');
-    const addUser = (await screen.findAllByRole('heading', { name: 'Create login' }))
-      .at(-1)!
-      .closest('section')!;
-    await userEvent.type(within(addUser).getByLabelText('Name'), 'Owner Z');
-    await userEvent.type(within(addUser).getByLabelText('Mobile'), '9700000098');
-    await userEvent.click(within(addUser).getByRole('button', { name: 'Create login' }));
-    expect(await screen.findByRole('heading', { name: 'DUPLICATE_MOBILE' })).toBeInTheDocument();
+    rpc({ list_dealers: [] });
+    open('DISTRIBUTOR', '/d');
+    const add = (await screen.findByRole('heading', { name: 'Add dealer' })).closest('section')!;
+    await userEvent.type(within(add).getByLabelText('Dealer name'), 'Om Paints');
+    await userEvent.type(
+      within(add).getByLabelText('Dealer WhatsApp mobile number (this is the login)'),
+      '9822200001',
+    );
+    await userEvent.type(within(add).getByLabelText('4-digit PIN'), '2468');
+    await userEvent.click(within(add).getByRole('button', { name: 'Add dealer' }));
+    expect(await screen.findByText('DUPLICATE_MOBILE')).toBeInTheDocument();
+  });
+
+  it('reports a network failure when adding', async () => {
+    signIn();
+    server.use(http.post(`${API}/functions/v1/admin-create-user`, () => HttpResponse.error()));
+    rpc({ list_dealers: [] });
+    open('DISTRIBUTOR', '/d');
+    const add = (await screen.findByRole('heading', { name: 'Add dealer' })).closest('section')!;
+    await userEvent.type(within(add).getByLabelText('Dealer name'), 'Om Paints');
+    await userEvent.type(
+      within(add).getByLabelText('Dealer WhatsApp mobile number (this is the login)'),
+      '9822200001',
+    );
+    await userEvent.type(within(add).getByLabelText('4-digit PIN'), '2468');
+    await userEvent.click(within(add).getByRole('button', { name: 'Add dealer' }));
+    expect(await screen.findByText('Something went wrong. Try again.')).toBeInTheDocument();
+  });
+
+  it('switches a dealer login off and on', async () => {
+    signIn();
+    const calls = captureFunctions();
+    rpc({ list_dealers: DEALERS });
+    open('DISTRIBUTOR', '/d');
+    const on = (await screen.findByText('Shree Ganesh Paints')).closest('tr')!;
+    await userEvent.click(within(on).getByRole('button', { name: 'Switch off' }));
+    expect(await screen.findByText('Login switched off.')).toBeInTheDocument();
+    const off = screen.getByText('Sai Hardware').closest('tr')!;
+    await userEvent.click(within(off).getByRole('button', { name: 'Switch on' }));
+    expect(await screen.findByText('Login switched on.')).toBeInTheDocument();
+    expect(calls['admin-user-status']).toEqual([
+      { user_id: 21, status: 'INACTIVE', reason: 'Changed from the dealers list' },
+      { user_id: 22, status: 'ACTIVE', reason: 'Changed from the dealers list' },
+    ]);
+    const none = screen.getByText('No Login Yet').closest('tr')!;
+    expect(within(none).queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  it('sets a new PIN for a dealer; a weak PIN is explained', async () => {
+    signIn();
+    const sent: unknown[] = [];
+    rpc({
+      list_dealers: DEALERS,
+      set_user_pin: (a) => (sent.push(a), a['p_pin'] === '1111' ? err(409, 'WEAK_PIN') : null),
+    });
+    open('DISTRIBUTOR', '/d');
+    const row = (await screen.findByText('Shree Ganesh Paints')).closest('tr')!;
+    await userEvent.click(within(row).getByRole('button', { name: 'Set new PIN' }));
+    const save = within(row).getByRole('button', { name: 'Save' });
+    expect(save).toBeDisabled();
+    await userEvent.type(within(row).getByLabelText('4-digit PIN'), '1111');
+    await userEvent.click(save);
+    expect(await within(row).findByText(/Choose a PIN that is hard to guess/)).toBeInTheDocument();
+    await userEvent.clear(within(row).getByLabelText('4-digit PIN'));
+    await userEvent.type(within(row).getByLabelText('4-digit PIN'), '2468');
+    await userEvent.click(within(row).getByRole('button', { name: 'Save' }));
+    expect(await within(row).findByText('PIN updated.')).toBeInTheDocument();
+    expect(sent).toEqual([
+      { p_user_id: 21, p_pin: '1111' },
+      { p_user_id: 21, p_pin: '2468' },
+    ]);
+  });
+
+  it('a PIN reset that fails for another reason says so', async () => {
+    signIn();
+    rpc({ list_dealers: DEALERS, set_user_pin: err(500, 'x') });
+    open('DISTRIBUTOR', '/d');
+    const row = (await screen.findByText('Shree Ganesh Paints')).closest('tr')!;
+    await userEvent.click(within(row).getByRole('button', { name: 'Set new PIN' }));
+    await userEvent.type(within(row).getByLabelText('4-digit PIN'), '2468');
+    await userEvent.click(within(row).getByRole('button', { name: 'Save' }));
+    expect(await within(row).findByText('Something went wrong. Try again.')).toBeInTheDocument();
+  });
+
+  it('a distributor sees only dealers and PIN navigation', async () => {
+    signIn();
+    rpc({ list_dealers: [] });
+    open('DISTRIBUTOR', '/d');
+    await screen.findAllByText('Dealers');
+    expect(screen.getByRole('link', { name: 'Change PIN' })).toHaveAttribute('href', '/pin');
+    expect(screen.queryByRole('link', { name: /claim/i })).not.toBeInTheDocument();
   });
 });
 
 describe('24M', () => {
+  it('dashboard: totals, lots, distributors, top dealers and recent validations', async () => {
+    signIn('u', 'aal2');
+    rpc({ coupon_stats: STATS });
+    open('M24_ADMIN', '/m');
+    expect(await screen.findByRole('heading', { name: 'Dashboard' })).toBeInTheDocument();
+    const tile = (label: string) => screen.getByRole('heading', { name: label }).parentElement!;
+    expect(within(tile('All coupons')).getByText('1000')).toBeInTheDocument();
+    expect(within(tile('Active (live)')).getByText('800')).toBeInTheDocument();
+    expect(within(tile('Validated today')).getByText('7')).toBeInTheDocument();
+    expect(within(tile('Last 7 days')).getByText('40')).toBeInTheDocument();
+    expect(within(tile('Last 30 days')).getByText('120')).toBeInTheDocument();
+    expect(screen.getByText('LOT-001')).toBeInTheDocument();
+    expect(screen.getByText('DIST-PUNE')).toBeInTheDocument();
+    expect(screen.getAllByText('Shree Ganesh Paints').length).toBeGreaterThan(1);
+    expect(screen.getByText('P24-0000001')).toBeInTheDocument();
+  });
+
+  it('dashboard: a failure says why, and can be retried', async () => {
+    signIn('u', 'aal2');
+    let n = 0;
+    rpc({
+      coupon_stats: () => (n++ === 0 ? err(403, 'MFA_REQUIRED') : STATS),
+    });
+    open('M24_VIEWER', '/m');
+    expect(
+      await screen.findByText(
+        'Two-step verification is required for 24M access.',
+        {},
+        { timeout: 5000 },
+      ),
+    ).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(await screen.findByText('LOT-001')).toBeInTheDocument();
+  });
+
+  it('a generic dashboard failure shows the standard error', async () => {
+    signIn('u', 'aal2');
+    rpc({ coupon_stats: err(500, 'x') });
+    open('M24_VIEWER', '/m');
+    expect(
+      await screen.findByText('Something went wrong. Try again.', {}, { timeout: 5000 }),
+    ).toBeInTheDocument();
+  });
+
   it('weekly review: sections listed, review logged', async () => {
     signIn('u', 'aal2');
+    rest({});
     rpc({ log_weekly_review: 1 });
-    open('M24_ADMIN', '/m');
+    open('M24_ADMIN', '/m/review');
     expect(await screen.findByLabelText('Notes')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'WhatsApp health' })).not.toBeInTheDocument();
     await userEvent.type(screen.getByLabelText('Notes'), 'all good');
     await userEvent.click(screen.getByRole('button', { name: 'Mark weekly review done' }));
   });
 
-  it('maker validates; checker settles; settled claims export', async () => {
+  it('the weekly review is read-only for viewers', async () => {
     signIn('u', 'aal2');
-    rest({
-      dist_claim: [
-        { id: 3, status: 'SUBMITTED', distributor_id: 1, total_paise: 30000, cn_no: null },
-      ],
-    });
-    const calls: string[] = [];
-    rpc({
-      dist_claim_detail: {
-        claim: { id: 3, status: 'SUBMITTED', distributor: { name: 'Pune' } },
-        lines: [{ ...LINES[0], dealer: 'Shop', dealer_cn_no: 'CN-1' }],
-      },
-      m24_decide: () => (calls.push('decide'), { decided: 1 }),
-      m24_validate_claim: () => (calls.push('validate'), { total_paise: 10000 }),
-      m24_return_claim: () => (calls.push('return'), null),
-    });
-    const r = open('M24_ADMIN', '/m/claims');
-    expect(await screen.findByRole('link', { name: '#3' })).toHaveAttribute('href', '/m/claim/3');
-    r.unmount();
-    open('M24_ADMIN', '/m/claim/3');
-    await userEvent.click(await screen.findByRole('button', { name: 'Approve all eligible' }));
-    const row = screen.getByText('P24-0000001').closest('tr')!;
-    await userEvent.type(screen.getAllByLabelText('Reason')[0]!, 'bad');
-    await userEvent.click(within(row).getByRole('button', { name: 'Reject' }));
-    row.focus();
-    await userEvent.keyboard('a');
-    await userEvent.click(screen.getByRole('button', { name: 'Validate (maker)' }));
-    const ret = screen.getByRole('heading', { name: 'Return to distributor' }).closest('section')!;
-    await userEvent.type(within(ret).getByLabelText('Reason'), 'missing CN copies');
-    await userEvent.click(within(ret).getByRole('button', { name: 'Return to distributor' }));
-    await waitFor(() => {
-      expect(calls).toEqual(['decide', 'decide', 'decide', 'validate', 'return']);
-    });
-  });
-
-  it('checker settles a validated claim; settled export', async () => {
-    signIn('u', 'aal2');
-    let settled = false;
-    rpc({
-      dist_claim_detail: () => ({
-        claim: { id: 3, status: settled ? 'SETTLED' : 'VALIDATED', distributor: { name: 'Pune' } },
-        lines: [],
-      }),
-      m24_settle: () => ((settled = true), { total_paise: 10000 }),
-    });
-    server.use(
-      http.get(`${API}/rest/v1/rpc/m24_settlement_export`, () =>
-        HttpResponse.json([{ serial: 'P24-1', value_paise: 100 }]),
-      ),
-    );
-    const createUrl = vi.fn(() => 'blob:x');
-    URL.createObjectURL = createUrl;
-    URL.revokeObjectURL = vi.fn();
-    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
-    open('M24_FINANCE', '/m/claim/3');
-    const settle = (
-      await screen.findByRole('heading', { name: 'Settle with 24M CN (checker)' })
-    ).closest('section')!;
-    await userEvent.type(within(settle).getByLabelText('CN number'), 'M24-1');
-    await userEvent.click(
-      within(settle).getByRole('button', { name: 'Settle with 24M CN (checker)' }),
-    );
-    await userEvent.click(await screen.findByRole('button', { name: 'Download CSV' }));
-    await waitFor(() => {
-      expect(createUrl).toHaveBeenCalled();
-    });
+    rest({});
+    open('M24_VIEWER', '/m/review');
+    await screen.findByRole('heading', { name: 'Weekly review' });
+    expect(
+      screen.queryByRole('button', { name: 'Mark weekly review done' }),
+    ).not.toBeInTheDocument();
   });
 
   it('lookup: history, admin actions', async () => {
@@ -411,7 +329,7 @@ describe('24M', () => {
     open('M24_ADMIN', '/m/lookup');
     await userEvent.type(screen.getByLabelText('Serial or code'), 'none');
     await userEvent.click(screen.getByRole('button', { name: 'Search' }));
-    expect(await screen.findByText('Coupon not recognised. Do NOT pay.')).toBeInTheDocument();
+    expect(await screen.findByText('Coupon not recognised. Call 24M.')).toBeInTheDocument();
     await userEvent.clear(screen.getByLabelText('Serial or code'));
     await userEvent.type(screen.getByLabelText('Serial or code'), 'P24-0000001');
     await userEvent.click(screen.getByRole('button', { name: 'Search' }));
@@ -526,110 +444,201 @@ describe('24M', () => {
     expect(await screen.findByText('REASON_REQUIRED')).toBeInTheDocument();
   });
 
-  it('masters: distributors, SKUs, bulk upload dry run and commit, reassignment', async () => {
+  it('masters: add a distributor with its login, a sales rep, a dealer, a SKU, and reassign', async () => {
     signIn('u', 'aal2');
     const calls = captureFunctions();
-    const rpcs: string[] = [];
+    const rpcs: Record<string, unknown>[] = [];
     rest({
       distributor: [{ id: 1, code: 'DIST-PUNE', name: 'Pune' }],
       sku: [{ code: 'PRIMER-1L', name: 'Primer' }],
-      dealer: [{ id: 1, code: 'DLR-001', name: 'Shop' }],
     });
     rpc({
-      upsert_distributor: () => (rpcs.push('dist'), 1),
-      upsert_sku: () => (rpcs.push('sku'), null),
-      reassign_dealer: () => (rpcs.push('reassign'), null),
+      list_dealers: DEALERS,
+      upsert_distributor: (a) => (rpcs.push({ dist: a }), 7),
+      upsert_sku: (a) => (rpcs.push({ sku: a }), null),
+      reassign_dealer: (a) => (rpcs.push({ reassign: a }), null),
     });
     open('M24_ADMIN', '/m/masters');
-    const dist = (await screen.findAllByRole('heading', { name: 'Distributor' }))[0]!.closest(
+
+    const dist = (await screen.findByRole('heading', { name: 'Add distributor' })).closest(
       'section',
     )!;
-    await userEvent.type(within(dist).getByLabelText('Code'), 'DIST-X');
-    await userEvent.type(within(dist).getByLabelText('Name'), 'X Paints');
-    await userEvent.click(within(dist).getByRole('button', { name: 'Save' }));
+    await userEvent.type(within(dist).getByLabelText('Distributor name'), 'X Paints');
+    await userEvent.type(
+      within(dist).getByLabelText('Distributor code (letters and numbers)'),
+      'DIST-X',
+    );
+    await userEvent.type(
+      within(dist).getByLabelText('Distributor registered mobile number'),
+      '98000 00055',
+    );
+    await userEvent.type(within(dist).getByLabelText('4-digit PIN'), '2468');
+    await userEvent.click(within(dist).getByRole('button', { name: 'Add distributor' }));
+    expect(
+      await screen.findByText('Distributor added. They log in with this mobile number and PIN.'),
+    ).toBeInTheDocument();
+
+    const rep = screen
+      .getByRole('heading', { name: 'Add distributor sales rep' })
+      .closest('section')!;
+    await userEvent.type(within(rep).getByLabelText('Sales rep name'), 'Rep One');
+    await userEvent.type(within(rep).getByLabelText('Sales rep mobile number'), '9822200005');
+    await userEvent.type(within(rep).getByLabelText('4-digit PIN'), '8642');
+    await userEvent.click(within(rep).getByRole('button', { name: 'Add distributor sales rep' }));
+
+    const dealer = screen.getByRole('heading', { name: 'Add dealer (24M)' }).closest('section')!;
+    await userEvent.type(within(dealer).getByLabelText('Dealer name'), 'Om Paints');
+    await userEvent.type(
+      within(dealer).getByLabelText('Dealer WhatsApp mobile number (this is the login)'),
+      '9822200001',
+    );
+    await userEvent.type(within(dealer).getByLabelText('4-digit PIN'), '2468');
+    await userEvent.click(within(dealer).getByRole('button', { name: 'Add dealer (24M)' }));
+
     const sku = screen.getByRole('heading', { name: 'SKU' }).closest('section')!;
     await userEvent.type(within(sku).getByLabelText('Code'), 'PRIMER-4L');
     await userEvent.type(within(sku).getByLabelText('Name'), 'Primer 4 L');
     await userEvent.click(within(sku).getByRole('button', { name: 'Save' }));
-    const file = new File(['code,name,mobile,city,distributor_code\n'], 'dealers.csv', {
-      type: 'text/csv',
-    });
-    await userEvent.upload(screen.getByLabelText('Upload dealers CSV'), file);
-    await userEvent.click(screen.getByRole('button', { name: 'Check file' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Import' }));
-    expect(await screen.findByText(/"rows": 1/)).toBeInTheDocument();
-    const dealers = screen.getByRole('heading', { name: 'Dealers' }).closest('section')!;
+
+    const dealers = screen.getAllByRole('heading', { name: 'Dealers' })[0]!.closest('section')!;
     await userEvent.type(within(dealers).getByLabelText('Dealer'), '1');
     await userEvent.type(within(dealers).getByLabelText('Distributor'), '2');
     await userEvent.type(within(dealers).getByLabelText('Reason'), 'territory');
     await userEvent.click(within(dealers).getByRole('button', { name: 'Save' }));
+
     await waitFor(() => {
-      expect(rpcs).toEqual(['dist', 'sku', 'reassign']);
+      expect(calls['admin-create-user']).toHaveLength(3);
     });
-    expect(calls['bulk-upload']).toHaveLength(2);
+    expect(calls['admin-create-user']).toEqual([
+      {
+        name: 'X Paints',
+        mobile: '+919800000055',
+        role: 'DISTRIBUTOR',
+        distributor_id: 7,
+        pin: '2468',
+      },
+      {
+        name: 'Rep One',
+        mobile: '+919822200005',
+        role: 'DISTRIBUTOR',
+        distributor_id: 1,
+        is_rep: true,
+        pin: '8642',
+      },
+      {
+        name: 'Om Paints',
+        mobile: '+919822200001',
+        role: 'DEALER_OWNER',
+        parent_distributor_id: 1,
+        pin: '2468',
+      },
+    ]);
+    await waitFor(() => {
+      expect(rpcs.map((r) => Object.keys(r)[0])).toEqual(['dist', 'sku', 'reassign']);
+    });
+    expect(rpcs[0]).toEqual({
+      dist: { p_code: 'DIST-X', p_name: 'X Paints', p_mobile: '+919800000055', p_city: null },
+    });
   });
 
-  it('users: create (any role), links, status changes', async () => {
+  it('masters: a distributor without a valid mobile number is not created', async () => {
     signIn('u', 'aal2');
     const calls = captureFunctions();
+    let upserts = 0;
+    rest({ distributor: [] });
+    rpc({ list_dealers: [], upsert_distributor: () => (upserts += 1) });
+    open('M24_ADMIN', '/m/masters');
+    const dist = (await screen.findByRole('heading', { name: 'Add distributor' })).closest(
+      'section',
+    )!;
+    await userEvent.type(within(dist).getByLabelText('Distributor name'), 'X Paints');
+    await userEvent.type(
+      within(dist).getByLabelText('Distributor code (letters and numbers)'),
+      'DIST-X',
+    );
+    await userEvent.type(
+      within(dist).getByLabelText('Distributor registered mobile number'),
+      '123',
+    );
+    await userEvent.type(within(dist).getByLabelText('4-digit PIN'), '2468');
+    await userEvent.click(within(dist).getByRole('button', { name: 'Add distributor' }));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(upserts).toBe(0);
+    expect(calls['admin-create-user']).toBeUndefined();
+  });
+
+  it('masters: if the distributor record is refused, no login is created', async () => {
+    signIn('u', 'aal2');
+    const calls = captureFunctions();
+    rest({ distributor: [] });
+    rpc({ list_dealers: [], upsert_distributor: err(409, 'DUPLICATE') });
+    open('M24_ADMIN', '/m/masters');
+    const dist = (await screen.findByRole('heading', { name: 'Add distributor' })).closest(
+      'section',
+    )!;
+    await userEvent.type(within(dist).getByLabelText('Distributor name'), 'X Paints');
+    await userEvent.type(
+      within(dist).getByLabelText('Distributor code (letters and numbers)'),
+      'DIST-X',
+    );
+    await userEvent.type(
+      within(dist).getByLabelText('Distributor registered mobile number'),
+      '9800000055',
+    );
+    await userEvent.type(within(dist).getByLabelText('4-digit PIN'), '2468');
+    await userEvent.click(within(dist).getByRole('button', { name: 'Add distributor' }));
+    expect(await screen.findByText('DUPLICATE')).toBeInTheDocument();
+    expect(calls['admin-create-user']).toBeUndefined();
+  });
+
+  it('users: PIN reset, status changes and adding 24M staff', async () => {
+    signIn('u', 'aal2');
+    const calls = captureFunctions();
+    const pins: unknown[] = [];
     rest({
       app_user: [
         { id: 1, name: 'Owner A', role: 'DEALER_OWNER', status: 'ACTIVE' },
+        { id: 5, name: 'Rep One', role: 'DISTRIBUTOR', is_sales_rep: true, status: 'ACTIVE' },
         { id: 9, name: 'Finance', role: 'M24_FINANCE', status: 'INACTIVE' },
       ],
     });
+    rpc({ set_user_pin: (a) => (pins.push(a), null) });
     open('M24_ADMIN', '/m/users');
     const owner = (await screen.findByText('Owner A')).closest('tr')!;
-    await userEvent.click(within(owner).getByRole('button', { name: 'Send login link' }));
-    expect(await screen.findByRole('link', { name: 'Open WhatsApp' })).toBeInTheDocument();
-    await userEvent.click(within(owner).getByRole('button', { name: 'Remove' }));
+    await userEvent.click(within(owner).getByRole('button', { name: 'Set new PIN' }));
+    await userEvent.type(within(owner).getByLabelText('4-digit PIN'), '2468');
+    await userEvent.click(within(owner).getByRole('button', { name: 'Save' }));
+    expect(await within(owner).findByText('PIN updated.')).toBeInTheDocument();
+    await userEvent.click(within(owner).getByRole('button', { name: 'Switch off' }));
     const fin = screen.getByText('Finance').closest('tr')!;
-    expect(within(fin).queryByRole('button', { name: 'Send login link' })).not.toBeInTheDocument();
-    await userEvent.click(within(fin).getByRole('button', { name: 'Approve' }));
+    expect(within(fin).queryByRole('button', { name: 'Set new PIN' })).not.toBeInTheDocument();
+    await userEvent.click(within(fin).getByRole('button', { name: 'Switch on' }));
     await userEvent.selectOptions(screen.getByLabelText('Role'), 'M24_VIEWER');
     await userEvent.type(screen.getByLabelText('Name'), 'Viewer');
     await userEvent.type(screen.getByLabelText('Email'), 'v@24m.in');
-    await userEvent.click(screen.getByRole('button', { name: 'Create login' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Add 24M staff' }));
     await waitFor(() => {
       expect(calls['admin-create-user']).toEqual([
         { name: 'Viewer', role: 'M24_VIEWER', email: 'v@24m.in' },
       ]);
     });
+    expect(pins).toEqual([{ p_user_id: 1, p_pin: '2468' }]);
     expect(calls['admin-user-status']).toEqual([
       { user_id: 1, status: 'INACTIVE', reason: 'Changed by 24M admin' },
       { user_id: 9, status: 'ACTIVE', reason: 'Changed by 24M admin' },
     ]);
   });
 
-  it('reports: monthly reconciliation and issues', async () => {
+  it('viewers and finance see the dashboard, review and lookup but not the editing pages', async () => {
     signIn('u', 'aal2');
-    rest({
-      'rpc/recon_summary': [{ distributor_id: 1, redeemed: 10, settled: 4 }],
-      recon_issue: [
-        { id: 1, run_date: '2026-10-01', check_name: 'DEALER_CN_TOTAL', ref: 'dealer_claim:1' },
-      ],
-    });
-    open('M24_VIEWER', '/m/reports');
-    expect(await screen.findByText('DEALER_CN_TOTAL')).toBeInTheDocument();
+    rpc({ coupon_stats: STATS });
+    open('M24_VIEWER', '/m');
+    await screen.findByRole('heading', { name: 'Dashboard' });
+    expect(screen.getByRole('link', { name: 'Weekly review' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Coupon lookup' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Lots' })).not.toBeInTheDocument();
-  });
-
-  it('a 24M query failing for MFA explains why', async () => {
-    signIn('u', 'aal2');
-    rest({ 'rpc/recon_summary': [] });
-    server.use(
-      http.get(`${API}/rest/v1/recon_issue`, () =>
-        HttpResponse.json({ message: 'MFA_REQUIRED' }, { status: 403 }),
-      ),
-    );
-    open('M24_VIEWER', '/m/reports');
-    expect(
-      await screen.findByText(
-        'Two-step verification is required for 24M access.',
-        {},
-        { timeout: 5000 },
-      ),
-    ).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Masters' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /claim/i })).not.toBeInTheDocument();
   });
 });
 

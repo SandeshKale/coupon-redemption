@@ -1,18 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import { backoffSeconds, DEFAULT_CONFIG } from './config.ts';
-import { COUPON_RESULTS, DO_NOT_PAY, isCouponResult } from './results.ts';
+import { isCouponResult } from './results.ts';
 
 describe('results', () => {
   it('guards result codes', () => {
-    expect(isCouponResult('REDEEMED')).toBe(true);
+    expect(isCouponResult('VALIDATED')).toBe(true);
     expect(isCouponResult('NOPE')).toBe(false);
     expect(isCouponResult(1)).toBe(false);
-  });
-
-  it('every do-not-pay code is a known result', () => {
-    for (const r of DO_NOT_PAY) expect(COUPON_RESULTS).toContain(r);
-    expect(DO_NOT_PAY.has('REDEEMED')).toBe(false);
   });
 });
 

@@ -68,14 +68,13 @@ export const VALID = {
   value_paise: 10000,
   product: '24M Primer 1 L',
 };
-export const REDEEMED = {
-  result: 'REDEEMED',
-  batch_id: 42,
-  count: 1,
+export const VALIDATED = {
+  result: 'VALIDATED',
+  serial: 'P24-0000001',
   value_paise: 10000,
-  lines: [],
-  at: '2026-10-26T10:00:00Z',
+  validated_at: '2026-10-26T10:00:00Z',
 };
+export const PUBLIC_ACTIVE = { result: 'GENUINE', value_paise: 10000, state: 'ACTIVE' };
 export const HOME = {
   today_count: 1,
   today_paise: 10000,
@@ -83,7 +82,6 @@ export const HOME = {
   month_paise: 10000,
   dealer: { name: 'Shree Ganesh Paints', status: 'ACTIVE' },
   user: { name: 'Owner A', role: 'DEALER_OWNER' },
-  wa_business_number: '919000000000',
   helpline: '+91 20 0000 0000',
   as_of: '2026-10-26T10:00:00Z',
 };

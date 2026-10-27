@@ -35,11 +35,7 @@ export function testServices(overrides: Partial<Services> = {}): Services {
       VITE_HELPLINE: '+91 20 0000 0000',
     }),
   );
-  return {
-    ...s,
-    redeemDeps: { ...s.redeemDeps, sleep: () => Promise.resolve(), random: () => 0 },
-    ...overrides,
-  };
+  return { ...s, ...overrides };
 }
 
 export function renderAt(
@@ -55,7 +51,15 @@ export function renderAt(
   const r = render(
     <ServicesContext.Provider value={services}>
       <I18nProvider lang={lang}>
-        <MemoryRouter initialEntries={[{ pathname: route, state }]}>
+        <MemoryRouter
+          initialEntries={[
+            {
+              pathname: route.split('?')[0] ?? '/',
+              search: route.includes('?') ? `?${route.split('?')[1] ?? ''}` : '',
+              state,
+            },
+          ]}
+        >
           <Routes>
             <Route path={path} element={element} />
             <Route path="*" element={<p>{'navigated'}</p>} />

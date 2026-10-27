@@ -1,22 +1,26 @@
 import { type ReactNode, useCallback, useEffect, useState } from 'react';
 
-import { BatchList } from '../../lib/api/schemas.ts';
+import { ValidationList } from '../../lib/api/schemas.ts';
 import { useI18n } from '../../lib/i18n/index.ts';
 import { useServices } from '../../lib/services.ts';
 import { Button, EmptyState, ErrorState, Money, Skeleton } from '../../ui/index.ts';
 
 const PAGE = 20;
 
-/** My coupons: what this dealer has paid out, newest first. */
+/** The coupons this shop has validated, newest first. */
 export function HistoryPage(): ReactNode {
   const i = useI18n();
   const { api } = useServices();
-  const [rows, setRows] = useState<BatchList | null>(null);
+  const [rows, setRows] = useState<ValidationList | null>(null);
   const [error, setError] = useState(false);
   const [more, setMore] = useState(true);
   const load = useCallback(
-    async (before: number | null) => {
-      const r = await api.rpc('my_batches', { p_limit: PAGE, p_before_id: before }, BatchList);
+    async (before: string | null) => {
+      const r = await api.rpc(
+        'my_validations',
+        { p_limit: PAGE, p_before: before },
+        ValidationList,
+      );
       if (!r.ok) {
         setError(true);
         return;
@@ -37,16 +41,13 @@ export function HistoryPage(): ReactNode {
       {rows.length === 0 ? <EmptyState>{i.t('history.empty')}</EmptyState> : null}
       <ul className="flex flex-col gap-2">
         {rows.map((b) => (
-          <li
-            key={b.batch_id}
-            className="flex flex-col gap-1 rounded-card border border-border p-3"
-          >
+          <li key={b.serial} className="flex flex-col gap-1 rounded-card border border-border p-3">
             <p className="flex justify-between font-semibold">
-              <span>{i.t('receipt.count', { count: b.count })}</span>
+              <span>{b.serial}</span>
               <Money paise={b.value_paise} />
             </p>
             <p className="text-sm text-muted">
-              {i.dateTime(b.created_at)} · {i.t('history.by', { name: b.redeemed_by })}
+              {i.dateTime(b.validated_at)} · {i.t('history.by', { name: b.validated_by })}
             </p>
           </li>
         ))}
@@ -54,7 +55,7 @@ export function HistoryPage(): ReactNode {
       {more && rows.length > 0 ? (
         <Button
           variant="secondary"
-          onClick={() => void load(rows[rows.length - 1]?.batch_id ?? null)}
+          onClick={() => void load(rows[rows.length - 1]?.validated_at ?? null)}
         >
           {i.t('history.more')}
         </Button>

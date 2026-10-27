@@ -1,14 +1,12 @@
 import { normaliseE164, rupeesToPaise } from '@24m/shared';
 import { type ReactNode, useState } from 'react';
-import { Link, useParams } from 'react-router';
 import * as v from 'valibot';
 
-import type { Row } from '../../lib/api/schemas.ts';
+import { CouponStats, JsonArray, type Row } from '../../lib/api/schemas.ts';
 import { type Key, useI18n } from '../../lib/i18n/index.ts';
 import { useServices } from '../../lib/services.ts';
 import {
   Button,
-  type Column,
   downloadBlob,
   ErrorState,
   Field,
@@ -16,11 +14,19 @@ import {
   Select,
   Skeleton,
   StatusPill,
-  toCsv,
 } from '../../ui/index.ts';
 
-import { num, str, useAction, useRows, useRpcData } from './data.ts';
-import { failureList, LineActions } from './distributor.tsx';
+import {
+  failureText,
+  num,
+  staticQuery,
+  str,
+  useAction,
+  useAdminCall,
+  useRows,
+  useRpcData,
+} from './data.ts';
+import { GST_PATTERN, newDealerBody, PinReset } from './distributor.tsx';
 import { ActionForm, cols, intOrNull, nullIfEmpty, RowsView, Section, Status } from './parts.tsx';
 
 interface LotOption {
@@ -229,50 +235,139 @@ function LotRangeActions({
   );
 }
 
-/** Masters: distributors, SKUs, bulk dealer upload (dry run first), reassignment. */
+/** Masters: distributors, sales reps, dealers and SKUs. */
 export function MastersPage(): ReactNode {
   const i = useI18n();
+  const dists = useRows('distributor?select=id,code,name,mobile_e164,city,status&order=code');
+  const options = (dists.data ?? []).map((d) => ({
+    value: String(num(d, 'id')),
+    label: `${str(d, 'code')} · ${str(d, 'name')}`,
+  }));
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-2xl font-bold">{i.t('nav.masters')}</h1>
-      <DistributorsSection />
+      <DistributorsSection query={dists} />
+      <AddRepSection options={options} />
+      <AddDealerSection options={options} />
       <SkusSection />
-      <UploadSection />
       <DealersMaster />
     </div>
   );
 }
 
-function DistributorsSection(): ReactNode {
+type Call = (fn: string, body: unknown, success?: string) => Promise<Row | null>;
+
+/** Add a distributor (name, code, registered mobile) and the PIN login for that mobile number. */
+function DistributorsSection({ query }: { readonly query: ReturnType<typeof useRows> }): ReactNode {
   const i = useI18n();
   const act = useAction();
-  const dists = useRows('distributor?select=id,code,name,mobile_e164,city,status&order=code');
+  const admin = useAdminCall(() => void query.refetch());
   return (
-    <Section title={i.t('col.distributor')}>
+    <Section title={i.t('m24.addDistributor')}>
       <RowsView
-        query={dists}
+        query={query}
         caption={i.t('col.distributor')}
         csvName="distributors"
-        columns={cols(i.t, ['code', 'name', 'mobile_e164', 'city', 'status'])}
+        columns={cols(i.t, ['code', 'name', 'mobile_e164', 'status'])}
       />
       <ActionForm
-        submitLabel={i.t('common.save')}
+        submitLabel={i.t('m24.addDistributor')}
+        pending={act.pending}
         fields={[
-          { name: 'code', label: 'col.code' },
-          { name: 'name', label: 'col.name' },
-          { name: 'mobile', label: 'col.mobile', type: 'tel', required: false },
-          { name: 'city', label: 'col.city', required: false },
+          { name: 'name', label: 'm24.distName' },
+          { name: 'code', label: 'm24.distCode', pattern: '[A-Za-z0-9\\-]{2,20}' },
+          { name: 'mobile', label: 'm24.distMobile', type: 'tel' },
+          { name: 'pin', label: 'col.pin', type: 'pin' },
         ]}
-        onSubmit={(vals) =>
-          act.run('upsert_distributor', {
+        onSubmit={async (vals) => {
+          const mobile = normaliseE164(vals['mobile'] ?? '');
+          if (mobile === null) return;
+          const id = await act.run('upsert_distributor', {
             p_code: vals['code'],
             p_name: vals['name'],
-            p_mobile: normaliseE164(vals['mobile'] ?? ''),
-            p_city: nullIfEmpty(vals['city']),
-          })
+            p_mobile: mobile,
+            p_city: null,
+          });
+          if (typeof id !== 'number') return;
+          await admin.call(
+            'admin-create-user',
+            {
+              name: vals['name'],
+              mobile,
+              role: 'DISTRIBUTOR',
+              distributor_id: id,
+              pin: vals['pin'],
+            },
+            i.t('m24.distributorAdded'),
+          );
+        }}
+      />
+      <Status
+        message={admin.message ?? act.message}
+        error={admin.message === null ? act.error : admin.error}
+      />
+    </Section>
+  );
+}
+
+/** A sales rep logs in with their own mobile number and PIN and can only add dealers. */
+function AddRepSection({ options }: { readonly options: readonly LotOption[] }): ReactNode {
+  const i = useI18n();
+  const admin = useAdminCall(() => undefined);
+  return (
+    <Section title={i.t('m24.addRep')}>
+      <ActionForm
+        submitLabel={i.t('m24.addRep')}
+        fields={[
+          { name: 'dist', label: 'col.distributor', options },
+          { name: 'name', label: 'm24.repName' },
+          { name: 'mobile', label: 'm24.repMobile', type: 'tel' },
+          { name: 'pin', label: 'col.pin', type: 'pin' },
+        ]}
+        onSubmit={(vals) =>
+          admin.call(
+            'admin-create-user',
+            {
+              name: vals['name'],
+              mobile: normaliseE164(vals['mobile'] ?? '') ?? vals['mobile'],
+              role: 'DISTRIBUTOR',
+              distributor_id: intOrNull(vals['dist']),
+              is_rep: true,
+              pin: vals['pin'],
+            },
+            i.t('m24.repAdded'),
+          )
         }
       />
-      <Status message={act.message} error={act.error} />
+      <Status message={admin.message} error={admin.error} />
+    </Section>
+  );
+}
+
+/** 24M can add a dealer under any distributor. */
+function AddDealerSection({ options }: { readonly options: readonly LotOption[] }): ReactNode {
+  const i = useI18n();
+  const admin = useAdminCall(() => undefined);
+  return (
+    <Section title={i.t('m24.addDealer')}>
+      <ActionForm
+        submitLabel={i.t('m24.addDealer')}
+        fields={[
+          { name: 'dist', label: 'col.distributor', options },
+          { name: 'name', label: 'dist.dealerName' },
+          { name: 'gst', label: 'dist.gst', required: false, pattern: GST_PATTERN },
+          { name: 'mobile', label: 'dist.whatsapp', type: 'tel' },
+          { name: 'pin', label: 'col.pin', type: 'pin' },
+        ]}
+        onSubmit={(vals) =>
+          admin.call(
+            'admin-create-user',
+            newDealerBody(vals, intOrNull(vals['dist']) ?? 0),
+            i.t('dist.created'),
+          )
+        }
+      />
+      <Status message={admin.message} error={admin.error} />
     </Section>
   );
 }
@@ -297,64 +392,17 @@ function SkusSection(): ReactNode {
   );
 }
 
-/** EC-130: dry run first; commit only a clean file, in one transaction. */
-function UploadSection(): ReactNode {
-  const i = useI18n();
-  const { callFunction } = useServices();
-  const [report, setReport] = useState<string | null>(null);
-  const [file, setFile] = useState<File | null>(null);
-  const upload = async (dryRun: boolean): Promise<void> => {
-    if (file === null) return;
-    const res = await callFunction('bulk-upload', {
-      method: 'POST',
-      query: `?dry_run=${String(dryRun)}`,
-      headers: { 'content-type': 'text/csv' },
-      body: await new Response(file).text(),
-    });
-    setReport(JSON.stringify(await res.json().catch(() => ({})), null, 1));
-  };
-  const reason = file === null ? i.t('m24.uploadCsv') : null;
-  return (
-    <Section title={i.t('m24.uploadCsv')}>
-      <label className="font-semibold" htmlFor="csv">
-        {i.t('m24.uploadCsv')}
-      </label>
-      <input
-        id="csv"
-        type="file"
-        accept=".csv,text/csv"
-        onChange={(e) => {
-          setFile(e.target.files?.[0] ?? null);
-        }}
-      />
-      <div className="grid grid-cols-2 gap-2">
-        <Button variant="secondary" onClick={() => void upload(true)} disabledReason={reason}>
-          {i.t('m24.dryRun')}
-        </Button>
-        <Button onClick={() => void upload(false)} disabledReason={reason}>
-          {i.t('m24.commit')}
-        </Button>
-      </div>
-      {report === null ? null : (
-        <pre className="overflow-x-auto rounded bg-surface-2 p-3 text-sm">{report}</pre>
-      )}
-    </Section>
-  );
-}
-
 function DealersMaster(): ReactNode {
   const i = useI18n();
   const act = useAction();
-  const dealers = useRows(
-    'dealer?select=id,code,name,mobile_e164,city,distributor_id,status&order=code',
-  );
+  const dealers = useRpcData('list_dealers', { p_distributor_id: null }, JsonArray);
   return (
     <Section title={i.t('nav.dealers')}>
       <RowsView
         query={dealers}
         caption={i.t('nav.dealers')}
         csvName="dealers"
-        columns={cols(i.t, ['code', 'name', 'mobile_e164', 'distributor_id', 'status'])}
+        columns={cols(i.t, ['name', 'gst', 'mobile_e164', 'distributor', 'validated'])}
       />
       <ActionForm
         submitLabel={i.t('common.save')}
@@ -376,100 +424,62 @@ function DealersMaster(): ReactNode {
   );
 }
 
-const ROLES = [
-  'DEALER_OWNER',
-  'DEALER_STAFF',
-  'DISTRIBUTOR',
-  'M24_ADMIN',
-  'M24_FINANCE',
-  'M24_VIEWER',
-] as const;
-
-/** Calls an admin Edge Function and reports the outcome (with a WhatsApp link when there is one). */
-function useAdminCall(onDone: () => void): {
-  msg: { text: string; url: string | null } | null;
-  call: (fn: string, body: unknown) => Promise<void>;
-} {
-  const i = useI18n();
-  const { callFunction } = useServices();
-  const [msg, setMsg] = useState<{ text: string; url: string | null } | null>(null);
-  return {
-    msg,
-    call: async (fn, body) => {
-      const r = await callFunction(fn, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      const json = (await r.json().catch(() => ({}))) as Row;
-      const error = typeof json['error'] === 'string' ? json['error'] : i.t('common.error');
-      setMsg({
-        text: r.ok ? i.t('common.done') : error,
-        url: typeof json['whatsapp_url'] === 'string' ? json['whatsapp_url'] : null,
-      });
-      onDone();
-    },
-  };
-}
+const STAFF_ROLES = ['M24_ADMIN', 'M24_FINANCE', 'M24_VIEWER'] as const;
 
 export function UsersPage(): ReactNode {
   const i = useI18n();
   const users = useRows(
-    'app_user?select=id,name,mobile_e164,email,role,dealer_id,distributor_id,status&order=id',
+    'app_user?select=id,name,mobile_e164,email,role,is_sales_rep,dealer_id,distributor_id,status&order=id',
   );
-  const { msg, call } = useAdminCall(() => void users.refetch());
+  const admin = useAdminCall(() => void users.refetch());
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-2xl font-bold">{i.t('nav.users')}</h1>
-      {msg === null ? null : (
-        <p role="status">
-          {msg.text}{' '}
-          {msg.url === null ? null : (
-            <a className="underline" href={msg.url} target="_blank" rel="noreferrer">
-              {i.t('dist.openWhatsApp')}
-            </a>
-          )}
-        </p>
-      )}
+      <Status message={admin.message} error={admin.error} />
       <RowsView
         query={users}
         caption={i.t('nav.users')}
         csvName="users"
         columns={[
-          ...cols(i.t, ['id', 'name', 'role', 'status']),
+          ...cols(i.t, ['id', 'name', 'role', 'is_sales_rep', 'status']),
           {
             key: 'actions',
             label: i.t('col.actions'),
-            render: (r) => <UserActions row={r} call={call} />,
+            render: (r) => <UserActions row={r} call={admin.call} />,
           },
         ]}
       />
-      <Section title={i.t('dist.addUser')}>
-        <CreateUserForm call={call} />
+      <Section title={i.t('m24.addStaff')}>
+        <ActionForm
+          submitLabel={i.t('m24.addStaff')}
+          fields={[
+            {
+              name: 'role',
+              label: 'col.role',
+              options: STAFF_ROLES.map((r) => ({ value: r, label: r })),
+            },
+            { name: 'name', label: 'col.name' },
+            { name: 'email', label: 'login.email', type: 'email' },
+          ]}
+          onSubmit={(vals) =>
+            admin.call('admin-create-user', {
+              name: vals['name'],
+              role: vals['role'],
+              email: vals['email'],
+            })
+          }
+        />
       </Section>
     </div>
   );
 }
 
-function UserActions({
-  row,
-  call,
-}: {
-  readonly row: Row;
-  readonly call: (fn: string, body: unknown) => Promise<void>;
-}): ReactNode {
+function UserActions({ row, call }: { readonly row: Row; readonly call: Call }): ReactNode {
   const i = useI18n();
   const active = str(row, 'status') === 'ACTIVE';
   return (
-    <span className="flex gap-1">
-      {str(row, 'role').startsWith('M24_') ? null : (
-        <Button
-          variant="secondary"
-          onClick={() => void call('admin-login-link', { user_id: num(row, 'id') })}
-        >
-          {i.t('dist.sendLink')}
-        </Button>
-      )}
+    <span className="flex flex-wrap items-end gap-2">
+      {str(row, 'role').startsWith('M24_') ? null : <PinReset userId={num(row, 'id')} />}
       <Button
         variant={active ? 'danger' : 'secondary'}
         onClick={() =>
@@ -480,262 +490,67 @@ function UserActions({
           })
         }
       >
-        {active ? i.t('staff.remove') : i.t('dist.approve')}
+        {active ? i.t('dist.switchOff') : i.t('dist.switchOn')}
       </Button>
     </span>
   );
 }
 
-function CreateUserForm({
-  call,
-}: {
-  readonly call: (fn: string, body: unknown) => Promise<void>;
-}): ReactNode {
-  const i = useI18n();
-  return (
-    <ActionForm
-      submitLabel={i.t('dist.addUser')}
-      fields={[
-        { name: 'role', label: 'col.role', options: ROLES.map((r) => ({ value: r, label: r })) },
-        { name: 'name', label: 'col.name' },
-        { name: 'mobile', label: 'col.mobile', type: 'tel', required: false },
-        { name: 'email', label: 'login.email', type: 'email', required: false },
-        { name: 'dealer_id', label: 'col.dealer', type: 'number', required: false },
-        { name: 'distributor_id', label: 'col.distributor', type: 'number', required: false },
-      ]}
-      onSubmit={(vals) => {
-        const optional = {
-          mobile: nullIfEmpty(vals['mobile']),
-          email: nullIfEmpty(vals['email']),
-          dealer_id: intOrNull(vals['dealer_id']),
-          distributor_id: intOrNull(vals['distributor_id']),
-        };
-        const body = Object.fromEntries(Object.entries(optional).filter(([, val]) => val !== null));
-        return call('admin-create-user', { name: vals['name'], role: vals['role'], ...body });
-      }}
-    />
-  );
-}
+const TILE = 'min-w-0 rounded-card bg-surface-2 p-4 break-words';
 
-export function M24ClaimsPage(): ReactNode {
+/** The live picture for 24M: where every coupon is, and who is validating. */
+export function DashboardPage(): ReactNode {
   const i = useI18n();
-  const q = useRows(
-    'dist_claim?select=id,status,distributor_id,created_at,total_paise,validated_by,cn_no&order=id.desc&limit=100',
-  );
-  return (
-    <div className="flex flex-col gap-4">
-      <h1 className="text-2xl font-bold">{i.t('nav.m24claims')}</h1>
-      <RowsView
-        query={q}
-        caption={i.t('nav.m24claims')}
-        csvName="distributor-claims"
-        columns={[
-          {
-            key: 'id',
-            label: i.t('col.id'),
-            render: (r) => (
-              <Link
-                className="underline"
-                to={`/m/claim/${num(r, 'id')}`}
-              >{`#${num(r, 'id')}`}</Link>
-            ),
-            value: (r) => num(r, 'id'),
-          },
-          ...cols(i.t, ['status', 'distributor_id']),
-          {
-            key: 'total_paise',
-            label: i.t('col.total'),
-            render: (r) => <Money paise={num(r, 'total_paise')} />,
-            value: (r) => num(r, 'total_paise'),
-          },
-          { key: 'cn_no', label: i.t('col.cn') },
-        ]}
-      />
-    </div>
-  );
-}
-
-const DistDetail = v.object({
-  claim: v.record(v.string(), v.unknown()),
-  lines: v.array(v.record(v.string(), v.unknown())),
-});
-
-/** 24M maker (validate) and checker (settle with CN), different people (R3-06). */
-export function M24ClaimDetailPage({ role }: { readonly role: string }): ReactNode {
-  const { id = '0' } = useParams();
-  const claimId = Number(id);
-  const i = useI18n();
-  const act = useAction();
-  const q = useRpcData('dist_claim_detail', { p_claim_id: claimId }, DistDetail);
-  const [reason, setReason] = useState('');
+  const q = useRpcData('coupon_stats', {}, CouponStats);
   if (q.isLoading) return <Skeleton />;
-  if (q.data === undefined) return <ErrorState onRetry={() => void q.refetch()} />;
-  const status = str(q.data.claim, 'status');
-  const maker = role === 'M24_ADMIN' && status === 'SUBMITTED';
-  const decide = (ids: number[] | null, decision: 'APPROVE' | 'REJECT' | 'HOLD'): void => {
-    void act.run('m24_decide', {
-      p_claim_id: claimId,
-      p_coupon_ids: ids,
-      p_decision: decision,
-      p_reason: decision === 'APPROVE' ? null : reason,
-    });
-  };
+  if (q.error !== null || q.data === undefined) {
+    return (
+      <ErrorState
+        {...(q.error === null ? {} : { message: failureText(q.error.failure, i.t) })}
+        onRetry={() => {
+          void q.refetch();
+        }}
+      />
+    );
+  }
+  const d = q.data;
+  const tiles: [Key, number][] = [
+    ['stats.all', d.totals.all],
+    ['stats.active', d.totals.active],
+    ['stats.validated', d.totals.validated],
+    ['stats.today', d.totals.validated_today],
+    ['stats.week', d.totals.validated_7d],
+    ['stats.month', d.totals.validated_30d],
+  ];
+  const table = (rows: readonly object[], keys: readonly string[], title: Key): ReactNode => (
+    <Section title={i.t(title)}>
+      <RowsView
+        query={staticQuery(rows as Row[])}
+        caption={i.t(title)}
+        csvName={title}
+        columns={cols(i.t, keys)}
+      />
+    </Section>
+  );
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-2xl font-bold">
-        {i.t('dist.claim', {
-          id: claimId,
-          dealer: str((q.data.claim['distributor'] ?? {}) as Row, 'name'),
-        })}
-      </h1>
-      <StatusPill tone={status === 'SETTLED' ? 'good' : 'neutral'}>
-        {i.t(`status.${status}` as Key)}
-      </StatusPill>
-      <Status message={act.message} error={act.error} />
-      {maker ? (
-        <div className="grid gap-2 sm:grid-cols-3">
-          <Button
-            onClick={() => {
-              decide(null, 'APPROVE');
-            }}
-          >
-            {i.t('dist.approveAll')}
-          </Button>
-          <Field
-            label={i.t('common.reason')}
-            value={reason}
-            onChange={(e) => {
-              setReason(e.target.value);
-            }}
-          />
-          <Button
-            variant="secondary"
-            onClick={() => void act.run('m24_validate_claim', { p_claim_id: claimId })}
-          >
-            {i.t('m24.validate')}
-          </Button>
-        </div>
-      ) : null}
-      <RowsView
-        query={{ data: q.data.lines, error: null, isLoading: false, refetch: () => q.refetch() }}
-        caption={i.t('nav.m24claims')}
-        onRowKey={(key, row) => {
-          if (!maker) return;
-          if (key === 'a') decide([num(row, 'coupon_id')], 'APPROVE');
-          if (key === 'r') decide([num(row, 'coupon_id')], 'REJECT');
-        }}
-        columns={m24LineColumns(i, maker, decide)}
-      />
-      <ClaimFooter claimId={claimId} role={role} status={status} run={act.run} />
+      <h1 className="text-2xl font-bold">{i.t('nav.dashboard')}</h1>
+      <section className="grid grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] gap-3">
+        {tiles.map(([key, n]) => (
+          <div key={key} className={TILE}>
+            <h2 className="text-muted">{i.t(key)}</h2>
+            <p className="text-3xl font-bold">{n}</p>
+          </div>
+        ))}
+      </section>
+      <p className="text-sm text-muted">
+        {i.t('common.lastUpdated', { time: i.dateTime(d.as_of) })}
+      </p>
+      {table(d.by_lot, ['lot_no', 'quantity', 'not_active', 'active', 'validated'], 'stats.byLot')}
+      {table(d.by_distributor, ['code', 'name', 'dealers', 'validated'], 'stats.byDistributor')}
+      {table(d.top_dealers, ['dealer', 'distributor', 'validated'], 'stats.topDealers')}
+      {table(d.recent, ['serial', 'dealer', 'at'], 'stats.recent')}
     </div>
-  );
-}
-
-function m24LineColumns(
-  i: ReturnType<typeof useI18n>,
-  maker: boolean,
-  decide: (ids: number[] | null, d: 'APPROVE' | 'REJECT' | 'HOLD') => void,
-): Column<Row>[] {
-  return [
-    ...cols(i.t, ['serial', 'dealer', 'dealer_cn_no']),
-    {
-      key: 'value_paise',
-      label: i.t('col.value'),
-      render: (r) => <Money paise={num(r, 'value_paise')} />,
-      value: (r) => num(r, 'value_paise'),
-    },
-    {
-      key: 'line_status',
-      label: i.t('col.status'),
-      value: (r) => i.t(`status.${str(r, 'line_status')}` as Key),
-    },
-    { key: 'failures', label: i.t('col.failures'), value: (r) => failureList(r, i.t) },
-    {
-      key: 'actions',
-      label: i.t('col.actions'),
-      render: (r) =>
-        maker && ['PENDING', 'HELD'].includes(str(r, 'line_status')) ? (
-          <LineActions id={num(r, 'coupon_id')} decide={decide} />
-        ) : null,
-    },
-  ];
-}
-
-function ClaimFooter({
-  claimId,
-  role,
-  status,
-  run,
-}: {
-  readonly claimId: number;
-  readonly role: string;
-  readonly status: string;
-  readonly run: ReturnType<typeof useAction>['run'];
-}): ReactNode {
-  const i = useI18n();
-  const { api } = useServices();
-  const exportCsv = async (): Promise<void> => {
-    const r = await api.select(
-      `rpc/m24_settlement_export?p_claim_id=${String(claimId)}`,
-      v.array(v.record(v.string(), v.unknown())),
-    );
-    if (!r.ok) return;
-    const header = Object.keys(r.data[0] ?? {});
-    downloadBlob(
-      `settlement-${String(claimId)}.csv`,
-      new Blob(
-        [
-          toCsv(
-            header.map((h) => ({ key: h, label: h })),
-            r.data,
-          ),
-        ],
-        { type: 'text/csv' },
-      ),
-    );
-  };
-  return (
-    <>
-      {role === 'M24_ADMIN' && (status === 'SUBMITTED' || status === 'VALIDATED') ? (
-        <Section title={i.t('m24.return')}>
-          <ActionForm
-            submitLabel={i.t('m24.return')}
-            fields={[{ name: 'reason', label: 'common.reason' }]}
-            onSubmit={(vals) =>
-              run('m24_return_claim', { p_claim_id: claimId, p_reason: vals['reason'] })
-            }
-          />
-        </Section>
-      ) : null}
-      {role === 'M24_FINANCE' && status === 'VALIDATED' ? (
-        <Section title={i.t('m24.settle')}>
-          <ActionForm
-            submitLabel={i.t('m24.settle')}
-            fields={[
-              { name: 'cn', label: 'dist.cnNo' },
-              {
-                name: 'date',
-                label: 'dist.cnDate',
-                type: 'date',
-                initial: new Date().toISOString().slice(0, 10),
-              },
-            ]}
-            onSubmit={(vals) =>
-              run('m24_settle', {
-                p_claim_id: claimId,
-                p_cn_no: vals['cn'],
-                p_cn_date: vals['date'],
-              })
-            }
-          />
-        </Section>
-      ) : null}
-      {status === 'SETTLED' ? (
-        <Button variant="secondary" onClick={() => void exportCsv()}>
-          {i.t('common.downloadCsv')}
-        </Button>
-      ) : null}
-    </>
   );
 }
 
@@ -853,16 +668,6 @@ const REVIEW: readonly { title: Key; path: string; cols: readonly string[]; csv?
     path: 'v_dealer_velocity?select=dealer_id,dealer_name,week,coupons,usual_weekly,unusual&unusual=is.true',
     cols: ['dealer_name', 'week', 'coupons', 'usual_weekly'],
   },
-  {
-    title: 'col.age',
-    path: 'v_claim_ageing?select=kind,claim_id,status,distributor_id,since',
-    cols: ['kind', 'claim_id', 'status', 'since'],
-  },
-  {
-    title: 'claims.markReceived',
-    path: 'v_unacked_cn?select=claim_id,dealer_name,cn_no,cn_date,cn_total_paise',
-    cols: ['claim_id', 'dealer_name', 'cn_no', 'cn_date'],
-  },
 ];
 
 function ReviewTable({
@@ -908,52 +713,6 @@ export function ReviewPage({ role }: { readonly role: string }): ReactNode {
         />
       ) : null}
       <Status message={act.message} error={act.error} />
-    </div>
-  );
-}
-
-export function ReportsPage(): ReactNode {
-  const i = useI18n();
-  const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
-  const summary = useRows(`rpc/recon_summary?p_month=${month}-01`);
-  const issues = useRows(
-    'recon_issue?select=id,run_date,check_name,ref,details&order=id.desc&limit=200',
-  );
-  return (
-    <div className="flex flex-col gap-4">
-      <h1 className="text-2xl font-bold">{i.t('nav.reports')}</h1>
-      <Field
-        label={i.t('m24.reportMonth')}
-        type="month"
-        value={month}
-        onChange={(e) => {
-          setMonth(e.target.value);
-        }}
-      />
-      <RowsView
-        query={summary}
-        caption={i.t('nav.reports')}
-        csvName={`reconciliation-${month}`}
-        columns={cols(i.t, [
-          'distributor_id',
-          'redeemed',
-          'dist_approved',
-          'dist_rejected',
-          'dist_pending',
-          'claimed_to_24m',
-          'settled',
-          'm24_rejected',
-          'on_hold',
-        ])}
-      />
-      <Section title={i.t('col.check')}>
-        <RowsView
-          query={issues}
-          caption={i.t('col.check')}
-          csvName="recon-issues"
-          columns={cols(i.t, ['run_date', 'check_name', 'ref'])}
-        />
-      </Section>
     </div>
   );
 }

@@ -337,6 +337,7 @@ begin
     select jsonb_agg(row_to_json(x)::jsonb order by x.name) from (
       select d.id, d.code, d.name, d.gst, d.mobile_e164, d.status, d.distributor_id, ds.name as distributor,
              (select au.id from public.app_user au where au.dealer_id = d.id and au.role = 'DEALER_OWNER' order by au.id limit 1) as user_id,
+             (select au.status from public.app_user au where au.dealer_id = d.id and au.role = 'DEALER_OWNER' order by au.id limit 1) as user_status,
              (select count(*) from public.coupon c where c.redeemed_dealer_id = d.id and c.redeemed_at is not null) as validated
         from public.dealer d join public.distributor ds on ds.id = d.distributor_id
        where v_dist is null or d.distributor_id = v_dist

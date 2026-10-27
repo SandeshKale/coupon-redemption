@@ -1,9 +1,10 @@
 # 24M Primer ₹100 Painter Coupon
 
-A dealer scans the coupon inside a can of 24M Primer and taps **Paid ₹100 to painter** or
-**Declined to pay**. A paid coupon moves dealer → distributor → 24M for settlement. The painter
-WhatsApp confirmation in the plan is switched off ([ADR-0006](docs/adr/0006-two-option-dealer-flow.md)).
-The full specification is [docs/plan.md](docs/plan.md) (v2); decisions that differ from it are in
+A painter hands the coupon from the can to a dealer, who pays cash. Anyone who scans the coupon with
+a phone camera sees that it is genuine and its status. A dealer who logs in (mobile number and
+4-digit PIN) can also **validate** it. Distributors and their sales reps add dealers, and 24M sees
+every coupon live ([ADR-0007](docs/adr/0007-pin-login-and-validate.md)). Payment, claims and credit
+notes stay on paper. The full specification is [docs/plan.md](docs/plan.md) (v2); decisions that differ from it are in
 [docs/adr](docs/adr).
 
 ## Architecture

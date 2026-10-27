@@ -7,6 +7,10 @@ import * as v from 'valibot';
  * or sign out, and is prefetched when the browser is idle.
  */
 export const STORAGE_KEY = 'sb-24m-auth';
+/** When this device last logged in with a PIN (ms since epoch). */
+export const LOGIN_AT_KEY = '24m-login-at';
+/** A PIN login stays valid on a device for about six months. */
+export const SESSION_MAX_MS = 183 * 24 * 60 * 60 * 1000;
 const SKEW_S = 60;
 
 const StoredSession = v.object({
@@ -31,6 +35,13 @@ export function readStored(storage: Pick<Storage, 'getItem'>): StoredSession | n
   } catch {
     return null;
   }
+}
+
+export function sessionExpired(storage: Pick<Storage, 'getItem'>, now: number): boolean {
+  const raw = storage.getItem(LOGIN_AT_KEY);
+  if (raw === null) return false;
+  const at = Number(raw);
+  return Number.isFinite(at) && now - at > SESSION_MAX_MS;
 }
 
 /** JWT claims (unverified, display/routing only — the server verifies). */
@@ -61,6 +72,7 @@ export function createSession(deps: SessionDeps) {
   return {
     /** A token valid for at least a minute, refreshing via the SDK only when needed. */
     async getToken(): Promise<string | null> {
+      if (sessionExpired(deps.storage, deps.now())) return null;
       const s = readStored(deps.storage);
       if (s?.access_token === undefined) return null;
       if ((s.expires_at ?? 0) - SKEW_S > deps.now() / 1000) return s.access_token;
@@ -69,6 +81,7 @@ export function createSession(deps: SessionDeps) {
     },
     refresh,
     userId(): string | null {
+      if (sessionExpired(deps.storage, deps.now())) return null;
       return readStored(deps.storage)?.user?.id ?? null;
     },
     aal(): string | null {

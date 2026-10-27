@@ -6,34 +6,57 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../ui/Scanner.tsx', async () => ({
   Scanner: (await import('../../test/scanner-stub.tsx')).ScannerStub,
 }));
+vi.mock('../../lib/auth/client.ts', () => ({
+  loadAuthClient: () => Promise.resolve({ signOut: () => Promise.resolve({ error: null }) }),
+}));
 
-import { CODE, CODE2, HOME, REDEEMED, VALID } from '../../test/fixtures.ts';
+import { CODE, HOME, VALID, VALIDATED } from '../../test/fixtures.ts';
 import { renderAt, signIn } from '../../test/render.tsx';
 import { scanned } from '../../test/scanner-stub.tsx';
-import { API, err, rest, rpc, server } from '../../test/server.ts';
+import { API, err, rpc, server } from '../../test/server.ts';
 
-import { BulkScanPage } from './BulkScanPage.tsx';
-import { ClaimsPage } from './ClaimsPage.tsx';
-import { CouponPage } from './CouponPage.tsx';
+import { CouponPage, HOME_URL } from './CouponPage.tsx';
 import { HistoryPage } from './HistoryPage.tsx';
 import { HomePage } from './HomePage.tsx';
-import { ReceiptPage, summarise } from './ReceiptPage.tsx';
+import { PinPage } from './PinPage.tsx';
 import { ScanPage } from './ScanPage.tsx';
-import { StaffPage } from './StaffPage.tsx';
 import { TypeCodePage } from './TypeCodePage.tsx';
 
 beforeEach(() => {
   scanned.length = 0;
 });
 
-describe('CouponPage (§4.1)', () => {
-  it('logged out: public genuineness check, then the dealer login prompt', async () => {
+const open = (code = CODE) => renderAt(<CouponPage />, { path: '/c/:code', route: `/c/${code}` });
+
+describe('CouponPage: what anyone sees', () => {
+  it('shows a genuine active coupon with a login option and the 24M home page', async () => {
+    rpc({ public_coupon_info: { result: 'GENUINE', value_paise: 10000, state: 'ACTIVE' } });
+    open();
+    expect(await screen.findByText('Genuine 24M coupon · ₹100')).toBeInTheDocument();
+    expect(screen.getByText('Status: Active')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Login to validate' })).toHaveAttribute(
+      'href',
+      `/login?next=${encodeURIComponent(`/c/${CODE}`)}`,
+    );
+    const home = screen.getByRole('link', { name: 'Go to 24M home page' });
+    expect(home).toHaveAttribute('href', HOME_URL);
+    expect(HOME_URL).toBe('https://www.24m.in');
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['VALIDATED', 'Status: Validated'],
+    ['EXPIRED', 'Status: Expired'],
+  ])('shows the %s status', async (state, text) => {
+    rpc({ public_coupon_info: { result: 'GENUINE', value_paise: 10000, state } });
+    open();
+    expect(await screen.findByText(text)).toBeInTheDocument();
+  });
+
+  it('a genuine coupon without a state is treated as active', async () => {
     rpc({ public_coupon_info: { result: 'GENUINE', value_paise: 10000 } });
-    renderAt(<CouponPage />, { path: '/c/:code', route: `/c/${CODE}` });
-    expect(
-      await screen.findByText('Genuine 24M coupon · ₹100. Take it to your 24M dealer.'),
-    ).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Dealer? Log in' })).toBeInTheDocument();
+    open();
+    expect(await screen.findByText('Status: Active')).toBeInTheDocument();
   });
 
   it.each([
@@ -41,295 +64,294 @@ describe('CouponPage (§4.1)', () => {
     ['RATE_LIMITED', 'Too many checks. Try again later.'],
   ])('public %s', async (result, text) => {
     rpc({ public_coupon_info: { result } });
-    renderAt(<CouponPage />, { path: '/c/:code', route: `/c/${CODE}` });
+    open();
     expect(await screen.findByText(text)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Go to 24M home page' })).toBeInTheDocument();
   });
 
-  it('EC-005 a bad check character never reaches the network', async () => {
+  it('a bad check character never reaches the network', async () => {
+    open(`${CODE.slice(0, 12)}${CODE.endsWith('0') ? '1' : '0'}`);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Not a valid 24M code.');
+  });
+
+  it('a foreign QR address is not a 24M coupon', async () => {
     renderAt(<CouponPage />, {
       path: '/c/:code',
-      route: `/c/${CODE.slice(0, 12)}${CODE.endsWith('0') ? '1' : '0'}`,
+      route: '/c/https%3A%2F%2Fevil.example.com%2Fc%2F' + CODE,
     });
-    expect(await screen.findByRole('alert')).toHaveTextContent('Not a valid 24M code. Do NOT pay.');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Not a 24M coupon.');
   });
 
-  it('valid coupon → one tap → receipt (and the button locks while saving)', async () => {
+  it('a network failure on the public check offers a retry', async () => {
+    let n = 0;
+    rpc({
+      public_coupon_info: () =>
+        n++ === 0 ? err(500, 'x') : { result: 'GENUINE', value_paise: 10000, state: 'ACTIVE' },
+    });
+    open();
+    expect(
+      await screen.findByText('No internet. Try again when you are online.'),
+    ).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(await screen.findByText('Status: Active')).toBeInTheDocument();
+  });
+});
+
+describe('CouponPage: a signed-in dealer', () => {
+  it('sees one action, Validate, and the validation sticks', async () => {
     signIn();
-    let redeemCalls = 0;
+    let validateCalls = 0;
     rpc({
       check_coupon: VALID,
-      redeem: () => {
-        redeemCalls += 1;
-        return REDEEMED;
+      validate_coupon: () => {
+        validateCalls += 1;
+        return VALIDATED;
       },
     });
-    renderAt(<CouponPage />, { path: '/c/:code', route: `/c/${CODE.toLowerCase()}` });
+    open(CODE.toLowerCase());
     expect(await screen.findByText('Valid coupon · ₹100')).toBeInTheDocument();
     expect(screen.getByText('Serial P24-0000001')).toBeInTheDocument();
     expect(screen.getByText('24M Primer 1 L')).toBeInTheDocument();
-    const confirm = screen.getByRole('button', { name: 'Paid ₹100 to painter' });
-    await userEvent.dblClick(confirm);
-    expect(await screen.findByText('navigated')).toBeInTheDocument();
-    expect(redeemCalls).toBe(1);
+    expect(screen.getByText('Status: Active')).toBeInTheDocument();
+    expect(screen.getAllByRole('button')).toHaveLength(1);
+    expect(screen.queryByRole('link', { name: 'Login to validate' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Go to 24M home page' })).toBeInTheDocument();
+    await userEvent.dblClick(screen.getByRole('button', { name: 'Validate coupon' }));
+    expect(await screen.findByText('Validated ✓')).toBeInTheDocument();
+    expect(screen.getByText('Serial P24-0000001')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Scan next coupon' })).toBeInTheDocument();
+    expect(validateCalls).toBe(1);
   });
 
-  it('two choices only: Paid and Declined to pay', async () => {
-    signIn();
-    rpc({ check_coupon: VALID });
-    renderAt(<CouponPage />, { path: '/c/:code', route: `/c/${CODE}` });
-    await screen.findByText('Valid coupon · ₹100');
-    expect(screen.getAllByRole('button')).toHaveLength(2);
-    expect(screen.getByRole('button', { name: 'Declined to pay' })).toBeInTheDocument();
-  });
-
-  it('Declined to pay records the choice, pays nothing, and offers the next scan', async () => {
+  it('sends the normalised code', async () => {
     signIn();
     let sent: unknown = null;
-    let redeemCalls = 0;
     rpc({
       check_coupon: VALID,
-      decline_payment: (a) => {
-        sent = a['p_code'];
-        return { result: 'DECLINED', serial: 'P24-0000001', value_paise: 10000 };
-      },
-      redeem: () => {
-        redeemCalls += 1;
-        return REDEEMED;
-      },
+      validate_coupon: (a) => ((sent = a['p_code']), VALIDATED),
     });
-    renderAt(<CouponPage />, { path: '/c/:code', route: `/c/${CODE}` });
-    await userEvent.click(await screen.findByRole('button', { name: 'Declined to pay' }));
-    expect(
-      await screen.findByText('Noted: you did not pay. The coupon stays valid.'),
-    ).toBeInTheDocument();
+    open(CODE.toLowerCase());
+    await userEvent.click(await screen.findByRole('button', { name: 'Validate coupon' }));
+    await screen.findByText('Validated ✓');
     expect(sent).toBe(CODE);
-    expect(redeemCalls).toBe(0);
+  });
+
+  it.each([
+    [
+      { result: 'ALREADY_REDEEMED_SELF', redeemed_at: '2026-11-12T05:02:00Z' },
+      'Already validated by you on 12 Nov 2026, 10:32',
+    ],
+    [
+      { result: 'ALREADY_REDEEMED_OTHER', serial: 'P24-0000001' },
+      'Already validated by another dealer.',
+    ],
+    [{ result: 'EXPIRED', expires_at: '2026-11-12T05:02:00Z' }, 'Coupon expired on 12 Nov 2026.'],
+    [{ result: 'NOT_ACTIVE' }, 'This coupon is not active yet. Call 24M.'],
+    [{ result: 'BLOCKED' }, 'This coupon is blocked. Call 24M.'],
+    [{ result: 'NOT_FOUND' }, 'Coupon not recognised. Call 24M.'],
+    [{ result: 'DEALER_INACTIVE' }, 'Your shop is not active. Call 24M.'],
+    [{ result: 'TOO_MANY_INVALID' }, 'Too many wrong scans. Wait 10 minutes.'],
+  ])('%j offers no Validate button', async (check, text) => {
+    signIn();
+    rpc({ check_coupon: check });
+    open();
+    expect(await screen.findByText(text)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Validate coupon' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Scan next coupon' })).toBeInTheDocument();
   });
 
-  it('declining a coupon the server says is not valid shows why', async () => {
+  it('a coupon someone else validated first is explained', async () => {
     signIn();
     rpc({
       check_coupon: VALID,
-      decline_payment: { result: 'ALREADY_REDEEMED_OTHER', serial: 'P24-0000001' },
+      validate_coupon: { result: 'ALREADY_REDEEMED_OTHER', serial: 'P24-0000001' },
     });
-    renderAt(<CouponPage />, { path: '/c/:code', route: `/c/${CODE}` });
-    await userEvent.click(await screen.findByRole('button', { name: 'Declined to pay' }));
-    expect(
-      await screen.findByText('Already used at another shop. Do NOT pay.'),
-    ).toBeInTheDocument();
+    open();
+    await userEvent.click(await screen.findByRole('button', { name: 'Validate coupon' }));
+    expect(await screen.findByText('Already validated by another dealer.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Validate coupon' })).not.toBeInTheDocument();
   });
 
-  it('a failed decline is shown as a failure, not as noted', async () => {
-    signIn();
-    rpc({ check_coupon: VALID, decline_payment: err(500, 'x') });
-    renderAt(<CouponPage />, { path: '/c/:code', route: `/c/${CODE}` });
-    await userEvent.click(await screen.findByRole('button', { name: 'Declined to pay' }));
-    expect(await screen.findByText('No internet. Don’t pay yet.')).toBeInTheDocument();
-  });
-
-  it('EC-021 already used elsewhere: red, Do NOT pay, no confirm button', async () => {
-    signIn();
-    rpc({
-      check_coupon: { result: 'ALREADY_REDEEMED_OTHER', serial: 'P24-0000001', value_paise: 10000 },
-    });
-    renderAt(<CouponPage />, { path: '/c/:code', route: `/c/${CODE}` });
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Already used at another shop. Do NOT pay.',
-    );
-    expect(screen.getByText('Do NOT pay')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Confirm/ })).not.toBeInTheDocument();
-  });
-
-  it('EC-020 already redeemed by me shows when', async () => {
-    signIn();
-    rpc({ check_coupon: { result: 'ALREADY_REDEEMED_SELF', redeemed_at: '2026-11-12T05:02:00Z' } });
-    renderAt(<CouponPage />, { path: '/c/:code', route: `/c/${CODE}` });
-    expect(
-      await screen.findByText('Already redeemed by you on 12 Nov 2026, 10:32'),
-    ).toBeInTheDocument();
-  });
-
-  it('expired coupon', async () => {
-    signIn();
-    rpc({ check_coupon: { result: 'EXPIRED', expires_at: '2026-11-12T05:02:00Z' } });
-    renderAt(<CouponPage />, { path: '/c/:code', route: `/c/${CODE}` });
-    expect(await screen.findByText('Coupon expired on 12 Nov 2026.')).toBeInTheDocument();
-  });
-
-  it('session expired → login prompt; server error → retry', async () => {
-    signIn();
-    rpc({ check_coupon: err(401, 'AUTH_REQUIRED') });
-    renderAt(<CouponPage />, { path: '/c/:code', route: `/c/${CODE}` });
-    expect(await screen.findByRole('link', { name: 'Dealer? Log in' })).toBeInTheDocument();
-  });
-
-  it('server failure is never green; retry works', async () => {
+  it('a failed validation says so and can be retried from the start', async () => {
     signIn();
     let n = 0;
-    rpc({ check_coupon: () => (n++ === 0 ? err(500, 'x') : VALID) });
-    renderAt(<CouponPage />, { path: '/c/:code', route: `/c/${CODE}` });
-    expect(await screen.findByText('No internet. Don’t pay yet.')).toBeInTheDocument();
+    rpc({ check_coupon: VALID, validate_coupon: () => (n++ === 0 ? err(500, 'x') : VALIDATED) });
+    open();
+    await userEvent.click(await screen.findByRole('button', { name: 'Validate coupon' }));
+    expect(
+      await screen.findByText('No internet. Try again when you are online.'),
+    ).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
-    expect(await screen.findByText('Valid coupon · ₹100')).toBeInTheDocument();
+    await userEvent.click(await screen.findByRole('button', { name: 'Validate coupon' }));
+    expect(await screen.findByText('Validated ✓')).toBeInTheDocument();
   });
 
-  it('a definite redeem failure says "Not redeemed"', async () => {
+  it('a session that ran out falls back to the public view with the login option', async () => {
     signIn();
-    rpc({ check_coupon: VALID, redeem: err(403, 'FORBIDDEN') });
-    renderAt(<CouponPage />, { path: '/c/:code', route: `/c/${CODE}` });
-    await userEvent.click(await screen.findByRole('button', { name: 'Paid ₹100 to painter' }));
-    expect(await screen.findByText('Not redeemed. Try again.')).toBeInTheDocument();
-  });
-
-  it('forbidden role and captive portal', async () => {
-    signIn();
-    rpc({ check_coupon: err(403, 'FORBIDDEN') });
-    renderAt(<CouponPage />, { path: '/c/:code', route: `/c/${CODE}` });
-    expect(await screen.findByText('This login cannot redeem coupons.')).toBeInTheDocument();
-  });
-
-  it('EC-008 a foreign QR URL is not a 24M coupon', async () => {
-    renderAt(<CouponPage />, {
-      path: '/*',
-      route: '/c/https%3A%2F%2Fevil.example.com%2Fc%2F' + CODE,
-    });
-    expect(await screen.findByRole('alert')).toBeInTheDocument();
-  });
-});
-
-describe('ReceiptPage', () => {
-  it('shows what was paid, with nothing to wait for', () => {
-    signIn();
-    renderAt(<ReceiptPage />, { path: '/receipt/:batchId', route: '/receipt/42', state: REDEEMED });
-    expect(screen.getByText('Redeemed ✓ ₹100')).toBeInTheDocument();
-    expect(screen.queryByRole('img')).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Scan next coupon' })).toBeInTheDocument();
-  });
-
-  it('after a reload it reads the saved batch', async () => {
-    signIn();
-    rpc({ batch_status: { batch_id: 42, status: 'NONE', count: 2, value_paise: 20000 } });
-    renderAt(<ReceiptPage />, { path: '/receipt/:batchId', route: '/receipt/42' });
-    expect(await screen.findByText('2 coupons')).toBeInTheDocument();
-  });
-
-  it('EC-027 partial batches list what was not redeemed', () => {
-    signIn();
-    const partial = {
-      ...REDEEMED,
-      result: 'PARTIAL',
-      lines: [...REDEEMED.lines, { code: CODE2, result: 'ALREADY_REDEEMED_OTHER' }],
-    };
-    renderAt(<ReceiptPage />, { path: '/receipt/:batchId', route: '/receipt/42', state: partial });
-    expect(screen.getByText('1 of 2 coupons redeemed')).toBeInTheDocument();
-    expect(screen.getByText(/Already used at another shop/)).toBeInTheDocument();
-  });
-
-  it('summarise falls back to zeros with nothing loaded', () => {
-    expect(summarise(null, null)).toMatchObject({ count: 0, value: 0 });
-  });
-});
-
-describe('BulkScanPage (§5.2)', () => {
-  it('checks each scan, ignores duplicates, and redeems all valid in one request', async () => {
-    signIn();
-    scanned.push(CODE, CODE2, 'https://other.brand/p/1', 'garbage');
-    let sent: unknown = null;
     rpc({
-      check_coupon: ({ p_code }) =>
-        p_code === CODE ? VALID : { result: 'ALREADY_REDEEMED_OTHER', serial: 'P24-0000002' },
-      redeem: (args) => {
-        sent = args['p_codes'];
-        return REDEEMED;
-      },
+      check_coupon: err(401, 'AUTH_REQUIRED'),
+      public_coupon_info: { result: 'GENUINE', value_paise: 10000, state: 'ACTIVE' },
     });
-    renderAt(<BulkScanPage />, { path: '/scan-many', route: '/scan-many' });
-    expect(screen.getByRole('button', { name: /Confirm/ })).toBeDisabled();
-    await userEvent.click(screen.getByRole('button', { name: `scan ${CODE}` }));
-    await userEvent.click(screen.getByRole('button', { name: `scan ${CODE2}` }));
-    await userEvent.click(screen.getByRole('button', { name: `scan ${CODE}` }));
-    expect(screen.getByText('Already in list')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'scan https://other.brand/p/1' }));
-    expect(screen.getByText('Not a 24M coupon. Do NOT pay.')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'scan garbage' }));
-    expect(screen.getByText('Not a valid 24M code. Do NOT pay.')).toBeInTheDocument();
-    await screen.findByText('Valid coupon · ₹100');
-    await userEvent.click(screen.getByRole('button', { name: /Remove P24-0000002/ }));
-    await userEvent.click(screen.getByRole('button', { name: '₹100 for 1 coupons – Confirm' }));
-    expect(await screen.findByText('navigated')).toBeInTheDocument();
-    expect(sent).toEqual([CODE]);
+    open();
+    expect(await screen.findByRole('link', { name: 'Login to validate' })).toBeInTheDocument();
   });
 
-  it('EC-025 caps the list at 50 and shows check failures', async () => {
+  it('a failed validation with an expired session offers the login again', async () => {
     signIn();
-    const { code } = await import('../../test/fixtures.ts');
-    for (let n = 0; n < 51; n += 1) scanned.push(code(`AAAAAAAAA${n.toString().padStart(3, '0')}`));
-    rpc({ check_coupon: err(500, 'x') });
-    renderAt(<BulkScanPage />, { path: '/scan-many', route: '/scan-many' });
-    for (const s of scanned)
-      await userEvent.click(screen.getByRole('button', { name: `scan ${s}` }));
-    expect(screen.getByText('Maximum 50 coupons at once.')).toBeInTheDocument();
-    expect(screen.getAllByRole('listitem')).toHaveLength(50);
-    await userEvent.click(screen.getByRole('button', { name: 'close scanner' }));
-  }, 30_000);
+    rpc({ check_coupon: VALID, validate_coupon: err(401, 'AUTH_REQUIRED') });
+    open();
+    await userEvent.click(await screen.findByRole('button', { name: 'Validate coupon' }));
+    expect(await screen.findByText('Log in to validate')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Login to validate' })).toBeInTheDocument();
+  });
+
+  it('a signed-in distributor or 24M user sees the status but no way to validate', async () => {
+    signIn();
+    rpc({
+      check_coupon: err(403, 'FORBIDDEN'),
+      public_coupon_info: { result: 'GENUINE', value_paise: 10000, state: 'VALIDATED' },
+    });
+    open();
+    expect(await screen.findByText('Status: Validated')).toBeInTheDocument();
+    expect(screen.getByText('Only dealers can validate coupons.')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Login to validate' })).not.toBeInTheDocument();
+  });
+
+  it('a captive Wi-Fi page is never treated as an answer', async () => {
+    signIn();
+    server.use(
+      http.post(
+        `${API}/rest/v1/rpc/check_coupon`,
+        () =>
+          new HttpResponse('<html>Wi-Fi login</html>', {
+            headers: { 'content-type': 'text/html' },
+          }),
+      ),
+    );
+    open();
+    expect(
+      await screen.findByText('This Wi-Fi needs a login page. Use mobile data.'),
+    ).toBeInTheDocument();
+  });
 });
 
-describe('Home, history, type, scan', () => {
-  it('home totals, links for the owner, cached when offline', async () => {
+describe('Home, history, PIN, type, scan', () => {
+  it('home shows validated counts and the right links; cached when offline', async () => {
     signIn();
     rpc({ dealer_home: HOME });
-    renderAt(<HomePage userRole="DEALER_OWNER" />);
+    renderAt(<HomePage />);
     expect(await screen.findByText('Namaste, Owner A')).toBeInTheDocument();
-    expect(screen.getByText('₹300')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'My claims' })).toBeInTheDocument();
+    expect(screen.getByText('3 validated')).toBeInTheDocument();
+    expect(screen.getByText('20 validated')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Scan coupon' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Type code' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'My validations' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Change PIN' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /claims|staff|scan many/i })).not.toBeInTheDocument();
     server.use(http.post(`${API}/rest/v1/rpc/dealer_home`, () => HttpResponse.error()));
-    renderAt(<HomePage userRole="DEALER_STAFF" />);
+    renderAt(<HomePage />);
     expect(await screen.findByText(/Last updated/)).toBeInTheDocument();
   });
 
-  it('home with nothing cached shows a retryable error; log out', async () => {
+  it('home with nothing cached shows a retryable error', async () => {
     signIn();
     rpc({ dealer_home: err(500, 'x') });
-    renderAt(<HomePage userRole="DEALER_STAFF" />);
+    renderAt(<HomePage />);
     expect(await screen.findByRole('alert')).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'My claims' })).not.toBeInTheDocument();
   });
 
-  it('history lists batches and pages', async () => {
+  it('log out goes to the login page', async () => {
     signIn();
-    const row = (id: number) => ({
-      batch_id: id,
-      created_at: '2026-10-26T10:00:00Z',
-      count: 1,
+    rpc({ dealer_home: HOME });
+    renderAt(<HomePage />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Log out' }));
+    expect(await screen.findByText('navigated')).toBeInTheDocument();
+  });
+
+  it('history lists validated coupons and pages', async () => {
+    signIn();
+    const row = (n: number) => ({
+      serial: `P24-${String(n).padStart(7, '0')}`,
       value_paise: 10000,
-      redeemed_by: 'Staff A',
-      serials: ['P24-1'],
+      validated_at: `2026-10-26T10:${String(n % 60).padStart(2, '0')}:00Z`,
+      validated_by: 'Staff A',
     });
+    let before: unknown = 'unset';
     rpc({
-      my_batches: ({ p_before_id }) =>
-        p_before_id === null ? Array.from({ length: 20 }, (_, i) => row(100 - i)) : [row(1)],
+      my_validations: ({ p_before }) => {
+        before = p_before;
+        return p_before === null ? Array.from({ length: 20 }, (_, i) => row(100 - i)) : [row(1)];
+      },
     });
     renderAt(<HistoryPage />);
     expect(await screen.findAllByText(/by Staff A/)).toHaveLength(20);
+    expect(before).toBeNull();
     await userEvent.click(screen.getByRole('button', { name: 'Show more' }));
     await waitFor(() => {
       expect(screen.getAllByRole('listitem')).toHaveLength(21);
     });
+    expect(before).toBe('2026-10-26T10:21:00Z');
   });
 
-  it('history empty and error', async () => {
+  it('history: empty', async () => {
     signIn();
-    rpc({ my_batches: [] });
+    rpc({ my_validations: [] });
     renderAt(<HistoryPage />);
-    expect(await screen.findByText('No coupons yet')).toBeInTheDocument();
+    expect(await screen.findByText('No coupons validated yet')).toBeInTheDocument();
   });
 
   it('history error', async () => {
     signIn();
-    rpc({ my_batches: err(500, 'x') });
+    rpc({ my_validations: err(500, 'x') });
     renderAt(<HistoryPage />);
     expect(await screen.findByRole('alert')).toBeInTheDocument();
+  });
+
+  it('change PIN: needs a full, matching PIN, then saves', async () => {
+    signIn();
+    let sent: unknown = null;
+    rpc({ change_my_pin: (a) => ((sent = a), null) });
+    renderAt(<PinPage />);
+    const save = screen.getByRole('button', { name: 'Change PIN' });
+    expect(save).toBeDisabled();
+    await userEvent.type(screen.getByLabelText('Current PIN'), '2468x');
+    await userEvent.type(screen.getByLabelText('New PIN'), '1357');
+    await userEvent.type(screen.getByLabelText('New PIN again'), '135');
+    expect(screen.getByText('The two new PINs are different.')).toBeInTheDocument();
+    expect(save).toBeDisabled();
+    await userEvent.type(screen.getByLabelText('New PIN again'), '7');
+    await userEvent.click(save);
+    expect(await screen.findByText('PIN changed.')).toBeInTheDocument();
+    expect(sent).toEqual({ p_old: '2468', p_new: '1357' });
+    expect(screen.getByLabelText('Current PIN')).toHaveValue('');
+  });
+
+  it.each([
+    ['WRONG_PIN', 'The current PIN is wrong.'],
+    [
+      'WEAK_PIN',
+      'Choose a PIN that is hard to guess: not 1234 or 1111, and not the last four digits of your mobile number.',
+    ],
+  ])('change PIN: %s is explained', async (code, text) => {
+    signIn();
+    rpc({ change_my_pin: err(409, code) });
+    renderAt(<PinPage />);
+    await userEvent.type(screen.getByLabelText('Current PIN'), '2468');
+    await userEvent.type(screen.getByLabelText('New PIN'), '1357');
+    await userEvent.type(screen.getByLabelText('New PIN again'), '1357');
+    await userEvent.click(screen.getByRole('button', { name: 'Change PIN' }));
+    expect(await screen.findByText(text)).toBeInTheDocument();
+  });
+
+  it('change PIN: any other failure is a generic error', async () => {
+    signIn();
+    rpc({ change_my_pin: err(500, 'x') });
+    renderAt(<PinPage />);
+    await userEvent.type(screen.getByLabelText('Current PIN'), '2468');
+    await userEvent.type(screen.getByLabelText('New PIN'), '1357');
+    await userEvent.type(screen.getByLabelText('New PIN again'), '1357');
+    await userEvent.click(screen.getByRole('button', { name: 'Change PIN' }));
+    expect(await screen.findByText('Something went wrong. Try again.')).toBeInTheDocument();
   });
 
   it('type code → coupon page', async () => {
@@ -343,130 +365,12 @@ describe('Home, history, type, scan', () => {
     scanned.push('https://x.brand/p', 'abc', `https://c.example.in/c/${CODE}`);
     renderAt(<ScanPage />, { path: '/scan', route: '/scan' });
     await userEvent.click(screen.getByRole('button', { name: 'scan https://x.brand/p' }));
-    expect(screen.getByText('Not a 24M coupon. Do NOT pay.')).toBeInTheDocument();
+    expect(screen.getByText('Not a 24M coupon.')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'scan abc' }));
-    expect(screen.getByText('Not a valid 24M code. Do NOT pay.')).toBeInTheDocument();
+    expect(screen.getByText('Not a valid 24M code.')).toBeInTheDocument();
     await userEvent.click(
       screen.getByRole('button', { name: `scan https://c.example.in/c/${CODE}` }),
     );
     expect(await screen.findByText('navigated')).toBeInTheDocument();
-  });
-});
-
-describe('Owner: claims and staff', () => {
-  const claims = [
-    {
-      id: 3,
-      status: 'OPEN',
-      cn_no: null,
-      cn_date: null,
-      cn_total_paise: null,
-      lines: 2,
-      value_paise: 20000,
-      slip_token: 's3',
-    },
-    {
-      id: 2,
-      status: 'SUBMITTED',
-      cn_no: null,
-      cn_date: null,
-      cn_total_paise: null,
-      lines: 1,
-      value_paise: 10000,
-      slip_token: 's2',
-    },
-    {
-      id: 1,
-      status: 'CN_ISSUED',
-      cn_no: 'CN-1',
-      cn_date: '2026-10-01',
-      cn_total_paise: 10000,
-      lines: 1,
-      value_paise: 10000,
-      slip_token: 's1',
-    },
-  ];
-
-  it('submit, slip QR, mark CN received', async () => {
-    signIn();
-    const calls: string[] = [];
-    rpc({
-      my_claims: claims,
-      submit_dealer_claim: () => (calls.push('submit'), 3),
-      ack_dealer_cn: () => (calls.push('ack'), null),
-    });
-    renderAt(<ClaimsPage />);
-    await userEvent.click(await screen.findByRole('button', { name: 'Submit claim now' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Mark CN received' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Claim slip' }));
-    expect(screen.getByRole('img', { name: 'Claim slip' })).toBeInTheDocument();
-    expect(screen.getByText('CN CN-1 · 1 Oct 2026')).toBeInTheDocument();
-    await waitFor(() => {
-      expect(calls).toEqual(['submit', 'ack']);
-    });
-  });
-
-  it('claims: empty, error on action, load failure', async () => {
-    signIn();
-    rpc({ my_claims: [] });
-    renderAt(<ClaimsPage />);
-    expect(await screen.findByText('No claims yet')).toBeInTheDocument();
-  });
-
-  it('claims load failure', async () => {
-    signIn();
-    rpc({ my_claims: err(500, 'x') });
-    renderAt(<ClaimsPage />);
-    expect(await screen.findByRole('alert')).toBeInTheDocument();
-  });
-
-  it('staff: request a login and remove someone (with confirmation)', async () => {
-    signIn();
-    rest({
-      app_user: [
-        { id: 2, name: 'Staff A', mobile_e164: '+919800000002', status: 'ACTIVE' },
-        { id: 11, name: 'Old', mobile_e164: null, status: 'INACTIVE' },
-      ],
-    });
-    let requested: unknown = null;
-    let removed: unknown = null;
-    rpc({ request_staff: (a) => ((requested = a), 9) });
-    server.use(
-      http.post(
-        `${API}/functions/v1/admin-user-status`,
-        async ({ request }) => ((removed = await request.json()), HttpResponse.json({})),
-      ),
-    );
-    renderAt(<StaffPage dealerId={1} />);
-    await userEvent.click(await screen.findByRole('button', { name: 'Remove' }));
-    expect(
-      screen.getByRole('dialog', { name: 'Remove Staff A? They will be logged out immediately.' }),
-    ).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Remove' }));
-    await userEvent.click(screen.getAllByRole('button', { name: 'Remove' })[1]!);
-    await waitFor(() => {
-      expect(removed).toMatchObject({ user_id: 2, status: 'INACTIVE' });
-    });
-    await userEvent.type(screen.getByLabelText('Name'), 'Ravi');
-    await userEvent.type(screen.getByLabelText('Mobile number'), '123');
-    expect(screen.getByText('Your mobile number')).toBeInTheDocument();
-    await userEvent.clear(screen.getByLabelText('Mobile number'));
-    await userEvent.type(screen.getByLabelText('Mobile number'), '98765 43210');
-    await userEvent.click(screen.getByRole('button', { name: 'Send request' }));
-    expect(await screen.findByText('Request sent to your distributor.')).toBeInTheDocument();
-    expect(requested).toEqual({ p_name: 'Ravi', p_mobile: '+919876543210' });
-  });
-
-  it('staff: empty list and failed request', async () => {
-    signIn();
-    rest({ app_user: [] });
-    rpc({ request_staff: err(409, 'DUPLICATE_MOBILE') });
-    renderAt(<StaffPage dealerId={1} />);
-    expect(await screen.findByText('No staff yet')).toBeInTheDocument();
-    await userEvent.type(screen.getByLabelText('Name'), 'Ravi');
-    await userEvent.type(screen.getByLabelText('Mobile number'), '9876543210');
-    await userEvent.click(screen.getByRole('button', { name: 'Send request' }));
-    expect(await screen.findByText('Something went wrong. Try again.')).toBeInTheDocument();
   });
 });

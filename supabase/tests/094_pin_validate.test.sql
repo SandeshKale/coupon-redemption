@@ -1,6 +1,6 @@
 -- 0016: PIN login, dealer validate, sales reps, GST, public status, live stats.
 begin;
-select plan(86);
+select plan(90);
 
 -- ── PIN rules ───────────────────────────────────────────────────────────────
 select ok(public.pin_is_weak('1234'), 'pin: ascending run is weak');
@@ -132,6 +132,13 @@ select is(jsonb_array_length(tests.call('Distributor Pune', 'public.list_dealers
 select is(jsonb_array_length(tests.call('Admin', 'public.list_dealers(null)')), 21, '24M lists every dealer');
 select is(jsonb_array_length(tests.call('Admin', 'public.list_dealers(2)')), 7, '24M can filter by distributor');
 select is(tests.state('Owner A', 'public.list_dealers(null)'), 'PT403', 'dealers cannot list dealers');
+select is((select e ->> 'user_status' from jsonb_array_elements(tests.call('Admin', 'public.list_dealers(null)')) e where (e ->> 'id')::int = 1), 'ACTIVE', 'the list shows the login status');
+select is((select e ->> 'user_id' from jsonb_array_elements(tests.call('Admin', 'public.list_dealers(null)')) e where (e ->> 'id')::int = 1), '1', 'the list shows the owner login');
+
+-- ── Weekly cleanup removes old PIN login attempts ───────────────────────────
+insert into public.pin_attempt (ip_hash, at) values ('\x01', now() - interval '3 days'), ('\x02', now());
+select is((public.job_cleanup() ->> 'pin_attempt')::int, 1, 'cleanup removes PIN attempts older than a day');
+select is((select count(*)::int from public.pin_attempt where ip_hash = '\x02'), 1, 'and keeps recent ones');
 
 -- ── Reconciliation tolerates validate-only coupons ──────────────────────────
 select public.run_reconciliation();

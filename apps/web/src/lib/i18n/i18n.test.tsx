@@ -33,17 +33,15 @@ describe('dictionaries (§16.6)', () => {
     }
   });
 
-  it('every do-not-pay message says so in all three languages', () => {
-    for (const k of [
-      'result.already_other',
-      'result.not_found',
-      'result.not_active',
-      'result.blocked',
-    ] as const) {
-      expect(en[k]).toMatch(/Do NOT pay/);
-      expect(hi[k]).toMatch(/भुगतान न करें/);
-      expect(kn[k]).toMatch(/ಹಣ ಕೊಡಬೇಡಿ/);
+  it('the PIN and validate copy is written in all three languages', () => {
+    for (const k of ['login.pin', 'action.validate', 'pin.weak', 'login.pinWrong'] as const) {
+      expect(hi[k]).toMatch(/[ऀ-ॿ]/);
+      expect(kn[k]).toMatch(/[ಀ-೿]/);
+      expect(en[k]).not.toBe(hi[k]);
     }
+    expect(en['login.pin']).toMatch(/4/);
+    expect(hi['login.pin']).toMatch(/4/);
+    expect(kn['login.pin']).toMatch(/4/);
   });
 });
 

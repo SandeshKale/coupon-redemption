@@ -2,26 +2,63 @@ import { createContext, useContext } from 'react';
 import * as v from 'valibot';
 
 import { type Api, createApi } from './api/client.ts';
-import type { RedeemDeps } from './api/redeem.ts';
-import { Profile } from './api/schemas.ts';
+import { PinSession, Profile } from './api/schemas.ts';
 import { loadAuthClient } from './auth/client.ts';
-import { createSession, type Session } from './auth/session.ts';
+import { createSession, LOGIN_AT_KEY, type Session } from './auth/session.ts';
 import type { AppConfig } from './config.ts';
-import { waitOnline } from './network/status.ts';
+
+export type PinLoginResult = 'ok' | 'wrong' | 'limited' | 'error';
 
 /** Everything a screen needs from the outside world, injectable for tests. */
 export interface Services {
   readonly config: AppConfig;
   readonly api: Api;
   readonly session: Session;
-  readonly redeemDeps: RedeemDeps;
   readonly profile: () => Promise<Profile | null>;
   readonly callFunction: (
     name: string,
     init: RequestInit & { query?: string },
   ) => Promise<Response>;
+  readonly pinLogin: (mobile: string, pin: string) => Promise<PinLoginResult>;
   readonly signOut: () => Promise<void>;
   readonly now: () => number;
+}
+
+/** PIN login: the Edge Function checks the PIN and returns a session, which the auth SDK stores. */
+async function pinLoginWith(
+  callFunction: Services['callFunction'],
+  storage: Pick<Storage, 'setItem'>,
+  mobile: string,
+  pin: string,
+): Promise<PinLoginResult> {
+  let res: Response;
+  try {
+    res = await callFunction('pin-login', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ mobile, pin }),
+    });
+  } catch {
+    return 'error';
+  }
+  if (res.status === 401) return 'wrong';
+  if (res.status === 429) return 'limited';
+  if (!res.ok) return 'error';
+  const parsed = v.safeParse(PinSession, await res.json().catch(() => null));
+  if (!parsed.success) return 'error';
+  try {
+    const client = await loadAuthClient();
+    const { error } = await client.setSession(parsed.output);
+    if (error !== null) return 'error';
+  } catch {
+    return 'error';
+  }
+  try {
+    storage.setItem(LOGIN_AT_KEY, String(Date.now()));
+  } catch {
+    // the sign-in itself worked; only the six-month limit cannot be recorded
+  }
+  return 'ok';
 }
 
 export function createServices(config: AppConfig, win: Window = window): Services {
@@ -35,19 +72,21 @@ export function createServices(config: AppConfig, win: Window = window): Service
     online: () => win.navigator.onLine,
   });
   let cachedProfile: Promise<Profile | null> | null = null;
+  const callFunction: Services['callFunction'] = async (name, init) => {
+    const token = await session.getToken();
+    return win.fetch(`${config.supabaseUrl}/functions/v1/${name}${init.query ?? ''}`, {
+      ...init,
+      headers: {
+        apikey: config.anonKey,
+        ...(token === null ? {} : { authorization: `Bearer ${token}` }),
+        ...(init.headers as Record<string, string> | undefined),
+      },
+    });
+  };
   return {
     config,
     api,
     session,
-    redeemDeps: {
-      api,
-      storage,
-      sleep: (ms) => new Promise((r) => win.setTimeout(r, ms)),
-      random: Math.random,
-      uuid: () => win.crypto.randomUUID(),
-      refreshSession: () => session.refresh(),
-      waitOnline: () => waitOnline(win),
-    },
     profile: () => {
       const uid = session.userId();
       if (uid === null) return Promise.resolve(null);
@@ -66,19 +105,19 @@ export function createServices(config: AppConfig, win: Window = window): Service
         });
       return cachedProfile;
     },
-    callFunction: async (name, init) => {
-      const token = await session.getToken();
-      return win.fetch(`${config.supabaseUrl}/functions/v1/${name}${init.query ?? ''}`, {
-        ...init,
-        headers: {
-          apikey: config.anonKey,
-          ...(token === null ? {} : { authorization: `Bearer ${token}` }),
-          ...(init.headers as Record<string, string> | undefined),
-        },
-      });
+    callFunction,
+    pinLogin: async (mobile, pin) => {
+      const result = await pinLoginWith(callFunction, storage, mobile, pin);
+      if (result === 'ok') cachedProfile = null;
+      return result;
     },
     signOut: async () => {
       cachedProfile = null;
+      try {
+        storage.removeItem(LOGIN_AT_KEY);
+      } catch {
+        // best effort
+      }
       const client = await loadAuthClient();
       await client.signOut();
     },

@@ -7,23 +7,8 @@ import type { Profile } from '../../lib/api/schemas.ts';
 import { type Key, useI18n } from '../../lib/i18n/index.ts';
 
 import { QueryError } from './data.ts';
-import {
-  ClaimDetailPage,
-  ClaimTo24mPage,
-  DealersPage,
-  QueuePage,
-  SlipRedirect,
-} from './distributor.tsx';
-import {
-  LookupPage,
-  LotsPage,
-  M24ClaimDetailPage,
-  M24ClaimsPage,
-  MastersPage,
-  ReportsPage,
-  ReviewPage,
-  UsersPage,
-} from './m24.tsx';
+import { DealersPage } from './distributor.tsx';
+import { DashboardPage, LookupPage, LotsPage, MastersPage, ReviewPage, UsersPage } from './m24.tsx';
 
 /** Distributor and 24M back-office: one lazy chunk (TanStack Query lives only here). */
 function BackOffice({ profile }: { readonly profile: Profile }): ReactNode {
@@ -44,15 +29,13 @@ function BackOffice({ profile }: { readonly profile: Profile }): ReactNode {
   const isDist = profile.role === 'DISTRIBUTOR';
   const links: [string, Key][] = isDist
     ? [
-        ['/d', 'nav.queue'],
-        ['/d/claims', 'nav.claimTo24m'],
-        ['/d/dealers', 'nav.dealers'],
+        ['/d', 'nav.dealers'],
+        ['/pin', 'nav.pin'],
       ]
     : [
-        ['/m', 'nav.review'],
-        ['/m/claims', 'nav.m24claims'],
+        ['/m', 'nav.dashboard'],
+        ['/m/review', 'nav.review'],
         ['/m/lookup', 'nav.lookup'],
-        ['/m/reports', 'nav.reports'],
         ...(profile.role === 'M24_ADMIN'
           ? ([
               ['/m/lots', 'nav.lots'],
@@ -66,24 +49,12 @@ function BackOffice({ profile }: { readonly profile: Profile }): ReactNode {
       <BackOfficeNav links={links} />
       <Routes>
         {isDist ? (
-          <>
-            <Route index element={<QueuePage />} />
-            <Route path="claim/:id" element={<ClaimDetailPage />} />
-            <Route path="slip/:token" element={<SlipRedirect />} />
-            <Route path="claims" element={<ClaimTo24mPage />} />
-            <Route
-              path="dealers"
-              element={<DealersPage distributorId={profile.distributor_id} />}
-            />
-          </>
+          <Route index element={<DealersPage distributorId={profile.distributor_id} />} />
         ) : (
           <>
-            <Route index element={<ReviewPage role={profile.role} />} />
-            <Route path="claims" element={<M24ClaimsPage />} />
-            <Route path="claim/:id" element={<M24ClaimDetailPage role={profile.role} />} />
-            <Route path="slip/:token" element={<SlipRedirect />} />
+            <Route index element={<DashboardPage />} />
+            <Route path="review" element={<ReviewPage role={profile.role} />} />
             <Route path="lookup" element={<LookupPage role={profile.role} />} />
-            <Route path="reports" element={<ReportsPage />} />
             <Route path="lots" element={<LotsPage />} />
             <Route path="masters" element={<MastersPage />} />
             <Route path="users" element={<UsersPage />} />

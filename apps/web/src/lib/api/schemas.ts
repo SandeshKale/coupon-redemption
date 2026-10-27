@@ -13,39 +13,9 @@ export const CheckResponse = v.object({
   product: v.optional(v.nullable(v.string())),
   expires_at: v.optional(v.nullable(Ts)),
   redeemed_at: v.optional(Ts),
+  validated_at: v.optional(Ts),
 });
 export type CheckResponse = v.InferOutput<typeof CheckResponse>;
-
-export const RedeemLine = v.object({
-  code: v.optional(v.nullable(v.string())),
-  result: Result,
-  serial: v.optional(v.string()),
-  value_paise: v.optional(v.number()),
-  redeemed_at: v.optional(Ts),
-  expires_at: v.optional(v.nullable(Ts)),
-});
-
-export const RedeemResponse = v.object({
-  result: Result,
-  batch_id: v.optional(v.number()),
-  count: v.optional(v.number()),
-  value_paise: v.optional(v.number()),
-  lines: v.optional(v.array(RedeemLine), []),
-  at: v.optional(Ts),
-});
-export type RedeemResponse = v.InferOutput<typeof RedeemResponse>;
-
-export const OutcomeResponse = v.union([
-  v.object({ found: v.literal(false) }),
-  v.object({ found: v.literal(true), response: RedeemResponse }),
-]);
-
-export const BatchStatus = v.object({
-  batch_id: v.number(),
-  count: v.number(),
-  value_paise: v.number(),
-});
-export type BatchStatus = v.InferOutput<typeof BatchStatus>;
 
 export const DealerHome = v.object({
   today_count: v.number(),
@@ -59,23 +29,56 @@ export const DealerHome = v.object({
 });
 export type DealerHome = v.InferOutput<typeof DealerHome>;
 
-export const BatchList = v.array(
+export const ValidationList = v.array(
   v.object({
-    batch_id: v.number(),
-    created_at: Ts,
-    count: v.number(),
+    serial: v.string(),
     value_paise: v.number(),
-    redeemed_by: v.string(),
-    serials: v.nullable(v.array(v.string())),
+    validated_at: Ts,
+    validated_by: v.string(),
   }),
 );
-export type BatchList = v.InferOutput<typeof BatchList>;
+export type ValidationList = v.InferOutput<typeof ValidationList>;
 
 export const PublicInfo = v.object({
   result: v.picklist(['GENUINE', 'NOT_RECOGNISED', 'INVALID_FORMAT', 'RATE_LIMITED']),
   value_paise: v.optional(v.number()),
+  state: v.optional(v.picklist(['ACTIVE', 'VALIDATED', 'EXPIRED'])),
   helpline: v.optional(v.nullable(v.string())),
 });
+export type PublicInfo = v.InferOutput<typeof PublicInfo>;
+
+export const PinSession = v.object({
+  access_token: v.string(),
+  refresh_token: v.string(),
+});
+
+const Count = v.number();
+export const CouponStats = v.object({
+  totals: v.object({
+    all: Count,
+    active: Count,
+    validated: Count,
+    validated_today: Count,
+    validated_7d: Count,
+    validated_30d: Count,
+  }),
+  by_lot: v.array(
+    v.object({
+      lot_no: v.string(),
+      quantity: Count,
+      active: Count,
+      validated: Count,
+      not_active: Count,
+    }),
+  ),
+  by_distributor: v.array(
+    v.object({ code: v.string(), name: v.string(), dealers: Count, validated: Count }),
+  ),
+  top_dealers: v.array(v.object({ dealer: v.string(), distributor: v.string(), validated: Count })),
+  recent: v.array(v.object({ serial: v.string(), dealer: v.string(), at: Ts })),
+  as_of: Ts,
+});
+export type CouponStats = v.InferOutput<typeof CouponStats>;
 
 export const Profile = v.array(
   v.object({

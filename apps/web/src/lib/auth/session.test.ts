@@ -2,7 +2,15 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { fakeJwt } from '../../test/render.tsx';
 
-import { claims, createSession, readStored, STORAGE_KEY } from './session.ts';
+import {
+  claims,
+  createSession,
+  LOGIN_AT_KEY,
+  readStored,
+  SESSION_MAX_MS,
+  sessionExpired,
+  STORAGE_KEY,
+} from './session.ts';
 
 function store(value: unknown): Pick<Storage, 'getItem'> {
   return {
@@ -95,5 +103,43 @@ describe('session', () => {
       loadClient: vi.fn(),
     });
     expect(noAal.aal()).toBeNull();
+  });
+});
+
+describe('six-month PIN login', () => {
+  const withLogin = (at: string | null): Pick<Storage, 'getItem'> => ({
+    getItem: (k) =>
+      k === LOGIN_AT_KEY
+        ? at
+        : k === STORAGE_KEY
+          ? JSON.stringify({ access_token: 'tok', expires_at: 4_000_000_000, user: { id: 'u' } })
+          : null,
+  });
+
+  it('sessionExpired is false without a record, true only after 183 days', () => {
+    expect(sessionExpired(withLogin(null), 10)).toBe(false);
+    expect(sessionExpired(withLogin('garbage'), 10)).toBe(false);
+    expect(sessionExpired(withLogin('1000'), 1000 + SESSION_MAX_MS)).toBe(false);
+    expect(sessionExpired(withLogin('1000'), 1000 + SESSION_MAX_MS + 1)).toBe(true);
+  });
+
+  it('an expired login yields no token and no user, so the app asks for the PIN again', async () => {
+    const s = createSession({
+      storage: withLogin('1000'),
+      now: () => 1000 + SESSION_MAX_MS + 1,
+      loadClient: vi.fn(),
+    });
+    expect(await s.getToken()).toBeNull();
+    expect(s.userId()).toBeNull();
+  });
+
+  it('a login inside the window still works', async () => {
+    const s = createSession({
+      storage: withLogin('1000'),
+      now: () => 1000 + 60_000,
+      loadClient: vi.fn(),
+    });
+    expect(await s.getToken()).toBe('tok');
+    expect(s.userId()).toBe('u');
   });
 });

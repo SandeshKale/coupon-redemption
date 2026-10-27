@@ -1,14 +1,20 @@
 import { http, HttpResponse } from 'msw';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('./auth/client.ts', () => ({
-  loadAuthClient: vi.fn(() =>
-    Promise.resolve({ signOut: vi.fn(() => Promise.resolve({ error: null })) }),
-  ),
-}));
+const authClient = {
+  signOut: vi.fn(() => Promise.resolve({ error: null })),
+  setSession: vi.fn(() => Promise.resolve({ error: null })),
+};
+vi.mock('./auth/client.ts', () => ({ loadAuthClient: vi.fn(() => Promise.resolve(authClient)) }));
 
 import { signIn, testServices } from '../test/render.tsx';
-import { API, server } from '../test/server.ts';
+import { API, fn, server } from '../test/server.ts';
+
+import { LOGIN_AT_KEY } from './auth/session.ts';
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
 describe('services', () => {
   it('profile: null when signed out; cached per session; null on failure', async () => {
@@ -59,24 +65,77 @@ describe('services', () => {
     expect(auth).toBeNull();
   });
 
-  it('signOut, now and redeem deps', async () => {
+  it('signOut clears the PIN login time; now is the clock', async () => {
+    localStorage.setItem(LOGIN_AT_KEY, '1');
     const s = testServices();
     await s.signOut();
     expect(typeof s.now()).toBe('number');
-    expect(s.redeemDeps.uuid()).toMatch(/^[0-9a-f-]{36}$/);
-    await expect(s.redeemDeps.waitOnline()).resolves.toBeUndefined();
+    expect(localStorage.getItem(LOGIN_AT_KEY)).toBeNull();
+  });
+
+  describe('pinLogin', () => {
+    const tokens = {
+      access_token: 'a',
+      refresh_token: 'r',
+      expires_in: 3600,
+      token_type: 'bearer',
+    };
+
+    it('stores the session and the login time, and asks for no token itself', async () => {
+      let sent: unknown = null;
+      let auth: string | null = 'unset';
+      fn('pin-login', async (req) => {
+        sent = await req.json();
+        auth = req.headers.get('authorization');
+        return HttpResponse.json(tokens);
+      });
+      const before = Date.now();
+      expect(await testServices().pinLogin('+919800000001', '4817')).toBe('ok');
+      expect(sent).toEqual({ mobile: '+919800000001', pin: '4817' });
+      expect(auth).toBeNull();
+      expect(authClient.setSession).toHaveBeenCalledWith({ access_token: 'a', refresh_token: 'r' });
+      expect(Number(localStorage.getItem(LOGIN_AT_KEY))).toBeGreaterThanOrEqual(before);
+    });
+
+    it('401 is a wrong login, 429 is rate limited, anything else is an error', async () => {
+      fn('pin-login', () => HttpResponse.json({ error: 'LOGIN_FAILED' }, { status: 401 }));
+      expect(await testServices().pinLogin('+919800000001', '1111')).toBe('wrong');
+      fn('pin-login', () => HttpResponse.json({ error: 'RATE_LIMITED' }, { status: 429 }));
+      expect(await testServices().pinLogin('+919800000001', '1111')).toBe('limited');
+      fn('pin-login', () => HttpResponse.json({}, { status: 500 }));
+      expect(await testServices().pinLogin('+919800000001', '1111')).toBe('error');
+      fn('pin-login', () => HttpResponse.error());
+      expect(await testServices().pinLogin('+919800000001', '1111')).toBe('error');
+      expect(localStorage.getItem(LOGIN_AT_KEY)).toBeNull();
+    });
+
+    it('a malformed answer, or the SDK refusing the session, is an error', async () => {
+      fn('pin-login', () => HttpResponse.json({ access_token: 'a' }));
+      expect(await testServices().pinLogin('+919800000001', '4817')).toBe('error');
+      fn('pin-login', () => new HttpResponse('not json'));
+      expect(await testServices().pinLogin('+919800000001', '4817')).toBe('error');
+      fn('pin-login', () => HttpResponse.json(tokens));
+      authClient.setSession.mockResolvedValueOnce({ error: { message: 'bad' } } as never);
+      expect(await testServices().pinLogin('+919800000001', '4817')).toBe('error');
+      authClient.setSession.mockRejectedValueOnce(new Error('boom'));
+      expect(await testServices().pinLogin('+919800000001', '4817')).toBe('error');
+    });
+
+    it('still logs in when the login time cannot be stored', async () => {
+      fn('pin-login', () => HttpResponse.json(tokens));
+      const spy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+        throw new Error('full');
+      });
+      expect(await testServices().pinLogin('+919800000001', '4817')).toBe('ok');
+      spy.mockRestore();
+    });
   });
 });
 
 describe('services wiring', () => {
-  it('real redeem deps sleep, randomise and refresh; useServices needs a provider', async () => {
-    const { createServices, useServices } = await import('./services.ts');
-    const { readConfig } = await import('./config.ts');
+  it('useServices needs a provider', async () => {
+    const { useServices } = await import('./services.ts');
     const { renderHook } = await import('@testing-library/react');
-    const s = createServices(readConfig({ VITE_SUPABASE_URL: API }));
-    await expect(s.redeemDeps.sleep(1)).resolves.toBeUndefined();
-    expect(s.redeemDeps.random()).toBeGreaterThanOrEqual(0);
-    expect(await s.redeemDeps.refreshSession()).toBe(false);
     expect(() => renderHook(() => useServices())).toThrow('useServices outside ServicesContext');
   });
 });
