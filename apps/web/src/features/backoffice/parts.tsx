@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
+import { type ReactNode, useId, useState } from 'react';
 
 import type { Row } from '../../lib/api/schemas.ts';
 import { type Key, useI18n } from '../../lib/i18n/index.ts';
@@ -10,9 +10,10 @@ import {
   Field,
   Select,
   Skeleton,
+  useReveal,
 } from '../../ui/index.ts';
 
-import { failureText, type QueryError, str } from './data.ts';
+import { explain, failureText, type QueryError, str } from './data.ts';
 
 export function Section({
   title,
@@ -29,16 +30,9 @@ export function Section({
   );
 }
 
-const HINT: Record<string, Key> = {
-  LOT_NOT_EXPORTED: 'err.lotNotExported',
-  BAD_MFG_DATE: 'err.badMfgDate',
-  BAD_RANGE: 'err.badRange',
-  UNKNOWN_SKU: 'err.unknownSku',
-};
-
 /**
  * The outcome of the last action. It scrolls into view when it changes, so the answer is seen even
- * when the button that caused it is far down the page, and known refusals get a plain explanation.
+ * when the button that caused it is far down the page, and a refusal code gets a plain explanation.
  */
 export function Status({
   message,
@@ -48,14 +42,8 @@ export function Status({
   readonly error: boolean;
 }): ReactNode {
   const { t } = useI18n();
-  const ref = useRef<HTMLParagraphElement>(null);
-  useEffect(() => {
-    const el = ref.current;
-    if (message !== null && el !== null && typeof el.scrollIntoView === 'function') {
-      el.scrollIntoView({ block: 'center', behavior: 'smooth' });
-    }
-  }, [message]);
-  const hint = error && message !== null ? HINT[message] : undefined;
+  const ref = useReveal<HTMLParagraphElement>(message);
+  const hint = error && message !== null ? explain(message, t) : undefined;
   return (
     <p
       ref={ref}
@@ -63,7 +51,7 @@ export function Status({
       className={`min-h-6 ${error ? 'font-semibold text-danger' : 'text-success'}`}
     >
       {message}
-      {hint === undefined ? null : <span className="block font-normal text-ink">{t(hint)}</span>}
+      {hint === undefined ? null : <span className="block font-normal text-ink">{hint}</span>}
     </p>
   );
 }

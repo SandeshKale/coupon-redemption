@@ -15,3 +15,4 @@ export { Skeleton } from './Skeleton.tsx';
 export { Spinner } from './Spinner.tsx';
 export { EmptyState, ErrorState } from './States.tsx';
 export { StatusPill, type Tone } from './StatusPill.tsx';
+export { useReveal } from './useReveal.ts';

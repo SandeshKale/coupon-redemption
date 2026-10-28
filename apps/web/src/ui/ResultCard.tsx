@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
 
+import { useReveal } from './useReveal.ts';
+
 export type ResultVariant = 'valid' | 'invalid' | 'checking' | 'warning';
 
 const STYLE: Record<ResultVariant, { box: string; icon: string }> = {
@@ -23,8 +25,11 @@ export function ResultCard({
   readonly children?: ReactNode;
 }): ReactNode {
   const s = STYLE[variant];
+  // A refusal or warning that appears below the fold (a login error, a refused scan) is brought into view.
+  const ref = useReveal<HTMLElement>(variant === 'valid' ? null : title, 'nearest');
   return (
     <section
+      ref={ref}
       role={variant === 'invalid' ? 'alert' : 'status'}
       aria-live={variant === 'invalid' ? 'assertive' : 'polite'}
       className={`pop-in min-h-40 min-w-0 rounded-card border-2 p-4 sm:p-5 ${s.box}`}

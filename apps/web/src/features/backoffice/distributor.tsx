@@ -5,9 +5,9 @@ import * as v from 'valibot';
 import { JsonArray, type Row } from '../../lib/api/schemas.ts';
 import { useI18n } from '../../lib/i18n/index.ts';
 import { useServices } from '../../lib/services.ts';
-import { Button, Field } from '../../ui/index.ts';
+import { Button, Field, useReveal } from '../../ui/index.ts';
 
-import { num, str, useAdminCall, useRpcData } from './data.ts';
+import { explain, num, str, useAdminCall, useRpcData } from './data.ts';
 import { ActionForm, cols, RowsView, Section, Status } from './parts.tsx';
 
 /** HTML pattern for the optional GST number (15 characters). */
@@ -111,6 +111,7 @@ export function PinReset({ userId }: { readonly userId: number }): ReactNode {
   const [open, setOpen] = useState(false);
   const [pin, setPin] = useState('');
   const [msg, setMsg] = useState<{ text: string; error: boolean } | null>(null);
+  const reveal = useReveal<HTMLSpanElement>(msg?.text ?? null);
   const save = async (): Promise<void> => {
     const r = await api.rpc('set_user_pin', { p_user_id: userId, p_pin: pin }, v.unknown());
     if (r.ok) {
@@ -120,8 +121,8 @@ export function PinReset({ userId }: { readonly userId: number }): ReactNode {
     } else {
       setMsg({
         text:
-          r.error.kind === 'business' && r.error.code === 'WEAK_PIN'
-            ? i.t('pin.weak')
+          r.error.kind === 'business'
+            ? (explain(r.error.code, i.t) ?? i.t('common.error'))
             : i.t('common.error'),
         error: true,
       });
@@ -161,6 +162,7 @@ export function PinReset({ userId }: { readonly userId: number }): ReactNode {
       )}
       {msg === null ? null : (
         <span
+          ref={reveal}
           role={msg.error ? 'alert' : 'status'}
           className={msg.error ? 'text-danger' : 'text-success'}
         >

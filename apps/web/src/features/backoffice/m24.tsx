@@ -42,12 +42,20 @@ export function LotsPage(): ReactNode {
   const lots = useRows(
     'coupon_lot?select=id,lot_no,quantity,value_paise,intended_sku,serial_prefix,serial_from,serial_to,status,generated_count,export_count&order=id.desc',
   );
-  const [progress, setProgress] = useState<string | null>(null);
+  const [progress, setProgress] = useState<{ text: string; error: boolean } | null>(null);
+  // A new action starts with a clean slate: an old progress line must never hide its result.
+  const run = (fn: string, args: Record<string, unknown>): Promise<unknown> => {
+    setProgress(null);
+    return act.run(fn, args);
+  };
   const generate = async (id: number, total: number): Promise<void> => {
     for (;;) {
-      const r = (await act.run('generate_lot_codes', { p_lot_id: id, p_max: 50000 })) as Row | null;
+      const r = (await run('generate_lot_codes', { p_lot_id: id, p_max: 50000 })) as Row | null;
       if (r === null) return;
-      setProgress(i.t('m24.generating', { done: num(r, 'generated'), total }));
+      setProgress({
+        text: i.t('m24.generating', { done: num(r, 'generated'), total }),
+        error: false,
+      });
       if (r['done'] === true) return;
     }
   };
@@ -58,7 +66,10 @@ export function LotsPage(): ReactNode {
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-2xl font-bold">{i.t('nav.lots')}</h1>
-      <Status message={progress ?? act.message} error={act.error} />
+      <Status
+        message={progress?.text ?? act.message}
+        error={progress === null ? act.error : progress.error}
+      />
       <RowsView
         query={lots}
         caption={i.t('nav.lots')}
@@ -76,9 +87,9 @@ export function LotsPage(): ReactNode {
           },
         ]}
       />
-      <CreateLot onCreated={(id, total) => generate(id, total)} run={act.run} />
+      <CreateLot onCreated={(id, total) => generate(id, total)} run={run} />
       <ExportLot lots={lotOptions} onDone={() => void lots.refetch()} onMessage={setProgress} />
-      <LotRangeActions lots={lotOptions} run={act.run} />
+      <LotRangeActions lots={lotOptions} run={run} />
     </div>
   );
 }
@@ -126,7 +137,7 @@ function ExportLot({
 }: {
   readonly lots: readonly LotOption[];
   readonly onDone: () => void;
-  readonly onMessage: (m: string) => void;
+  readonly onMessage: (m: { text: string; error: boolean } | null) => void;
 }): ReactNode {
   const i = useI18n();
   const { callFunction } = useServices();
@@ -139,6 +150,7 @@ function ExportLot({
           { name: 'reason', label: 'm24.exportReason', required: false },
         ]}
         onSubmit={async (vals) => {
+          onMessage(null);
           const reason = nullIfEmpty(vals['reason']);
           const res = await callFunction('export-print-file', {
             method: 'GET',
@@ -146,10 +158,14 @@ function ExportLot({
           });
           if (!res.ok) {
             const body = (await res.json().catch(() => ({}))) as Row;
-            onMessage(typeof body['error'] === 'string' ? body['error'] : i.t('common.error'));
+            onMessage({
+              text: typeof body['error'] === 'string' ? body['error'] : i.t('common.error'),
+              error: true,
+            });
             return;
           }
           downloadBlob(`lot-${vals['lot_id'] ?? ''}.csv`, await res.blob());
+          onMessage({ text: i.t('common.done'), error: false });
           onDone();
         }}
       />
