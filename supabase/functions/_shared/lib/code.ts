@@ -73,7 +73,5 @@ function extractFromUrl(input: string, couponHost?: string): string | null {
 /** `couponHost` may list several hosts, separated by commas (for example the brand site and the app). */
 function hostAllowed(hostname: string, couponHost: string): boolean {
   const host = hostname.toLowerCase();
-  return couponHost
-    .split(',')
-    .some((h) => h.trim().toLowerCase().split('/')[0] === host);
+  return couponHost.split(',').some((h) => h.trim().toLowerCase().split('/')[0] === host);
 }
