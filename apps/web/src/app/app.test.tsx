@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { I18nProvider } from '../lib/i18n/index.ts';
 import { ServicesContext } from '../lib/services.ts';
-import { HOME, PROFILE, STATS } from '../test/fixtures.ts';
+import { CODE, HOME, PROFILE, STATS } from '../test/fixtures.ts';
 import { renderAt, signIn, testServices } from '../test/render.tsx';
 import { API, rest, rpc, server } from '../test/server.ts';
 
@@ -198,5 +198,13 @@ describe('the helpline set by 24M', () => {
     );
     await act(() => new Promise((r) => setTimeout(r, 50)));
     expect(screen.getByRole('link', { name: 'Call 24M: +91 20 0000 0000' })).toBeInTheDocument();
+  });
+});
+
+describe('the brand-site coupon path', () => {
+  it('/100Coupons/<code> opens the same coupon page as /c/<code>', async () => {
+    rpc({ public_coupon_info: { result: 'GENUINE', value_paise: 10000, state: 'ACTIVE' } });
+    app(`/100Coupons/${CODE}`);
+    expect(await screen.findByText('Status: Active')).toBeInTheDocument();
   });
 });

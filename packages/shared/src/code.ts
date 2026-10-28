@@ -24,9 +24,13 @@ export function displayCode(code: string): string {
   return (code.match(/.{1,4}/g) ?? []).join('-');
 }
 
-/** Uppercase URL so the QR encoder can use alphanumeric mode. */
-export function couponQrUrl(host: string, code: string): string {
-  return `HTTPS://${host.toUpperCase()}/C/${code}`;
+/**
+ * The address printed in the QR for a code. `where` is either a bare host (`c.example.in`, which
+ * serves `/c/<code>`) or a host with a path (`www.example.in/100Coupons`, which serves `/<path>/<code>`).
+ * The case is kept exactly, so the QR must be encoded in byte mode.
+ */
+export function couponQrUrl(where: string, code: string): string {
+  return where.includes('/') ? `https://${where}/${code}` : `https://${where}/c/${code}`;
 }
 
 /**
@@ -60,9 +64,13 @@ function extractFromUrl(input: string, couponHost?: string): string | null {
   } catch {
     return null;
   }
-  if (couponHost !== undefined && url.hostname.toLowerCase() !== couponHost.toLowerCase()) {
-    return null;
-  }
-  const match = /^\/c\/([^/]+)\/?$/i.exec(url.pathname);
+  if (couponHost !== undefined && !hostAllowed(url.hostname, couponHost)) return null;
+  const match = /^\/(?:c|100coupons)\/([^/]+)\/?$/i.exec(url.pathname);
   return match?.[1] === undefined ? null : decodeURIComponent(match[1]);
+}
+
+/** `couponHost` may list several hosts, separated by commas (for example the brand site and the app). */
+function hostAllowed(hostname: string, couponHost: string): boolean {
+  const host = hostname.toLowerCase();
+  return couponHost.split(',').some((h) => h.trim().toLowerCase().split('/')[0] === host);
 }

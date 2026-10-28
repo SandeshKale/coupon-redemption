@@ -30,8 +30,11 @@ describe('displayCode / couponQrUrl', () => {
     expect(displayCode('')).toBe('');
   });
 
-  it('builds an uppercase QR URL', () => {
-    expect(couponQrUrl('c.example.in', CODE)).toBe(`HTTPS://C.EXAMPLE.IN/C/${CODE}`);
+  it('builds the QR URL for a bare host or a host with a path, keeping the case', () => {
+    expect(couponQrUrl('c.example.in', CODE)).toBe(`https://c.example.in/c/${CODE}`);
+    expect(couponQrUrl('www.example.in/100Coupons', CODE)).toBe(
+      `https://www.example.in/100Coupons/${CODE}`,
+    );
   });
 });
 
@@ -75,6 +78,9 @@ describe('normaliseCode', () => {
     expect(normaliseCode(`HTTPS://C.EXAMPLE.IN/C/${CODE}`)).toMatchObject({ code: CODE });
     expect(normaliseCode(`c.example.in/c/${CODE}`)).toMatchObject({ code: CODE });
     expect(normaliseCode(`https://c.example.in/c/${CODE}/`)).toMatchObject({ code: CODE });
+    expect(normaliseCode(`https://www.example.in/100Coupons/${CODE}`)).toMatchObject({
+      code: CODE,
+    });
   });
 
   it('EC-008 another product QR is not a 24M coupon', () => {
@@ -107,5 +113,25 @@ describe('normaliseCode', () => {
         return r.ok && r.code === code && r.key === code.slice(0, 12);
       }),
     );
+  });
+});
+
+describe('several allowed hosts', () => {
+  const hosts = 'www.example.in, app.example.com';
+  it('accepts any listed host, with the /c/ or the /100Coupons/ path', () => {
+    expect(normaliseCode(`https://www.example.in/100Coupons/${CODE}`, hosts)).toMatchObject({
+      ok: true,
+    });
+    expect(normaliseCode(`https://APP.example.com/c/${CODE}`, hosts)).toMatchObject({ ok: true });
+  });
+  it('still refuses any other host and unknown paths', () => {
+    expect(normaliseCode(`https://evil.com/100Coupons/${CODE}`, hosts)).toEqual({
+      ok: false,
+      reason: 'NOT_24M',
+    });
+    expect(normaliseCode(`https://www.example.in/other/${CODE}`, hosts)).toEqual({
+      ok: false,
+      reason: 'NOT_24M',
+    });
   });
 });

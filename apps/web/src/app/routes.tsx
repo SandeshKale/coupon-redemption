@@ -32,6 +32,7 @@ function publicRoutes(): ReactNode {
   return (
     <>
       <Route path="c/:code" element={<CouponPage />} />
+      <Route path="100Coupons/:code" element={<CouponPage />} />
       <Route path="type" element={<TypeCodePage />} />
       <Route
         path="login"

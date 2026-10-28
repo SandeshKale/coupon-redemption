@@ -22,8 +22,8 @@ Deno.test('streams the print file, then records row count and SHA-256 (EC-015)',
   const text = await res.text();
   assertEquals(text.split('\r\n'), [
     'serial,code13,qr_url,display_code',
-    'P24-0000001,7KQ2M9XHTB4RJ,HTTPS://C.EXAMPLE.IN/C/7KQ2M9XHTB4RJ,7KQ2-M9XH-TB4R-J',
-    'P24-0000002,0000000000000,HTTPS://C.EXAMPLE.IN/C/0000000000000,0000-0000-0000-0',
+    'P24-0000001,7KQ2M9XHTB4RJ,https://c.example.in/c/7KQ2M9XHTB4RJ,7KQ2-M9XH-TB4R-J',
+    'P24-0000002,0000000000000,https://c.example.in/c/0000000000000,0000-0000-0000-0',
     '',
   ]);
   const finish = deps.calls.find((c) => c.name === 'finish_lot_export');
