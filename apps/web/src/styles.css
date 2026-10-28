@@ -19,6 +19,25 @@
   --radius-btn: var(--radius-btn);
 }
 
+/* The page never pans sideways: nothing may push it wider than the screen, and a stray drag
+   cannot slide it either (iOS lets a page drift when anything overflows). */
+html,
+body {
+  width: 100%;
+  max-width: 100%;
+  overscroll-behavior-x: none;
+  -webkit-text-size-adjust: 100%;
+}
+
+html {
+  overflow-x: hidden;
+}
+
+/* clip, not hidden: the body must not become a scroll container or sticky bars stop sticking. */
+body {
+  overflow-x: clip;
+}
+
 html {
   color: var(--c-ink);
   background: var(--c-surface);
