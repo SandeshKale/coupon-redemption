@@ -13,7 +13,9 @@ function LogoutButton(): ReactNode {
   const { t } = useI18n();
   const { session, signOut } = useServices();
   const navigate = useNavigate();
-  if (session.userId() === null) return null;
+  const { pathname } = useLocation();
+  // The coupon screen keeps one button only (Validate), so a stray tap cannot log the dealer out.
+  if (session.userId() === null || /^\/(c|100Coupons)\//i.test(pathname)) return null;
   return (
     <button
       type="button"

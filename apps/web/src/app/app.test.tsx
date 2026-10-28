@@ -138,6 +138,13 @@ describe('Shell: log out', () => {
     expect(screen.queryByRole('button', { name: 'Log out' })).not.toBeInTheDocument();
   });
 
+  it('is not shown on the coupon screen, which keeps a single button', async () => {
+    signIn('u-1');
+    app('/c/ABC');
+    await screen.findByRole('link', { name: /Call 24M/ });
+    expect(screen.queryByRole('button', { name: 'Log out' })).not.toBeInTheDocument();
+  });
+
   it('signs out and goes to the login page', async () => {
     signIn('u-1');
     const signOut = vi.fn(() => Promise.resolve());
