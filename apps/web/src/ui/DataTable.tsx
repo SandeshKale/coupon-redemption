@@ -19,6 +19,12 @@ export interface Column<R> {
   readonly value?: (row: R) => string | number | null;
 }
 
+/** On phones every row becomes a card and each cell shows its column name before its value. */
+const ROW =
+  'border-t border-surface-2 focus:bg-surface-2 max-sm:block max-sm:rounded-card max-sm:border max-sm:border-border max-sm:p-3';
+const CELL =
+  'p-2 align-top max-sm:flex max-sm:items-start max-sm:justify-between max-sm:gap-4 max-sm:px-0 max-sm:py-1.5 max-sm:break-words max-sm:before:shrink-0 max-sm:before:font-semibold max-sm:before:text-muted max-sm:before:content-[attr(data-label)]';
+
 function cellValue<R>(col: Column<R>, row: R): string | number | null {
   if (col.value) return col.value(row);
   const v = (row as Record<string, unknown>)[col.key];
@@ -87,7 +93,7 @@ function Head<R>({
   readonly toggle: (k: string) => void;
 }): ReactNode {
   return (
-    <thead className="bg-surface-2">
+    <thead className="bg-surface-2 max-sm:sr-only">
       <tr>
         {columns.map((c) => (
           <th
@@ -145,11 +151,11 @@ export function DataTable<R>({
   if (rows.length === 0) return <EmptyState>{t('common.empty')}</EmptyState>;
   return (
     <div className="flex flex-col gap-2">
-      <div className="overflow-x-auto rounded-card border border-border">
-        <table className="w-full border-collapse text-left">
+      <div className="overflow-x-auto rounded-card border border-border max-sm:border-0">
+        <table className="w-full border-collapse text-left max-sm:block">
           <caption className="sr-only">{caption}</caption>
           <Head columns={columns} sort={sort} toggle={toggle} />
-          <tbody ref={body}>
+          <tbody ref={body} className="max-sm:flex max-sm:flex-col max-sm:gap-3">
             {sorted.map((r, i) => (
               <tr
                 key={rowKey(r)}
@@ -157,10 +163,10 @@ export function DataTable<R>({
                 onKeyDown={(e) => {
                   onKey(e, i, r);
                 }}
-                className="border-t border-surface-2 focus:bg-surface-2"
+                className={ROW}
               >
                 {columns.map((c) => (
-                  <td key={c.key} className="p-2 align-top">
+                  <td key={c.key} data-label={c.label} className={CELL}>
                     {c.render ? c.render(r) : cellValue(c, r)}
                   </td>
                 ))}
