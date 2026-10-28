@@ -1,11 +1,31 @@
 import type { ReactNode } from 'react';
-import { Link, Outlet, useLocation } from 'react-router';
+import { Link, Outlet, useLocation, useNavigate } from 'react-router';
 
 import { useI18n } from '../lib/i18n/index.ts';
 import { useNetwork } from '../lib/network/status.ts';
+import { useServices } from '../lib/services.ts';
 import { Banner, HelpLink, LanguageSwitch } from '../ui/index.ts';
 
 import { UpdateBanner } from './UpdateBanner.tsx';
+
+/** Log out, in the header of every screen while someone is signed in (dealer, distributor, staff). */
+function LogoutButton(): ReactNode {
+  const { t } = useI18n();
+  const { session, signOut } = useServices();
+  const navigate = useNavigate();
+  if (session.userId() === null) return null;
+  return (
+    <button
+      type="button"
+      className="inline-flex min-h-12 items-center font-semibold underline underline-offset-4"
+      onClick={() => {
+        void signOut().then(() => navigate('/login'));
+      }}
+    >
+      {t('nav.logout')}
+    </button>
+  );
+}
 
 /** Header (language switch + help in the same place on every screen, 3.2.6), banners, outlet. */
 export function Shell({ helpline }: { readonly helpline: string | null }): ReactNode {
@@ -29,6 +49,7 @@ export function Shell({ helpline }: { readonly helpline: string | null }): React
         <span className="flex flex-wrap items-center gap-3">
           <LanguageSwitch />
           <HelpLink phone={helpline} />
+          <LogoutButton />
         </span>
       </header>
       {net === 'offline' ? <Banner tone="warning">{t('state.offline')}</Banner> : null}

@@ -131,6 +131,31 @@ describe('Shell', () => {
   });
 });
 
+describe('Shell: log out', () => {
+  it('is offered on every screen only while someone is signed in', async () => {
+    app('/privacy');
+    await screen.findByRole('link', { name: /Call 24M/ });
+    expect(screen.queryByRole('button', { name: 'Log out' })).not.toBeInTheDocument();
+  });
+
+  it('signs out and goes to the login page', async () => {
+    signIn('u-1');
+    const signOut = vi.fn(() => Promise.resolve());
+    render(
+      <ServicesContext.Provider value={testServices({ signOut })}>
+        <I18nProvider lang="en">
+          <MemoryRouter initialEntries={['/privacy']}>
+            <AppRoutes helpline={null} />
+          </MemoryRouter>
+        </I18nProvider>
+      </ServicesContext.Provider>,
+    );
+    await userEvent.click(await screen.findByRole('button', { name: 'Log out' }));
+    expect(signOut).toHaveBeenCalledTimes(1);
+    expect(await screen.findByRole('heading', { name: 'Log in' })).toBeInTheDocument();
+  });
+});
+
 describe('UpdateBanner (EC-055)', () => {
   it('appears when a new version waits and applies on request', async () => {
     const apply = vi.fn(() => Promise.resolve());
