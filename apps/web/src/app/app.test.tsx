@@ -11,6 +11,7 @@ import { renderAt, signIn, testServices } from '../test/render.tsx';
 import { API, rest, rpc, server } from '../test/server.ts';
 
 import { RoleGate, useProfile } from './Gate.tsx';
+import { LiveRoutes } from './LiveRoutes.tsx';
 import { PrivacyPage } from './PrivacyPage.tsx';
 import { notifyUpdate, UpdateBanner } from './UpdateBanner.tsx';
 import { prefetchDealerRoutes } from './lazy.ts';
@@ -164,5 +165,38 @@ describe('misc', () => {
       setTimeout: noop,
     } as unknown as Window);
     expect(noop).not.toHaveBeenCalled();
+  });
+});
+
+describe('the helpline set by 24M', () => {
+  it('replaces the one baked into the build once it has loaded', async () => {
+    rpc({ public_helpline: '+91 98440 70070' });
+    render(
+      <ServicesContext.Provider value={testServices()}>
+        <I18nProvider lang="en">
+          <MemoryRouter initialEntries={['/privacy']}>
+            <LiveRoutes helpline="+91 20 0000 0000" />
+          </MemoryRouter>
+        </I18nProvider>
+      </ServicesContext.Provider>,
+    );
+    expect(
+      await screen.findByRole('link', { name: 'Call 24M: +91 98440 70070' }),
+    ).toBeInTheDocument();
+  });
+
+  it('keeps the baked-in number when none is set or the call fails', async () => {
+    rpc({ public_helpline: null });
+    render(
+      <ServicesContext.Provider value={testServices()}>
+        <I18nProvider lang="en">
+          <MemoryRouter initialEntries={['/privacy']}>
+            <LiveRoutes helpline="+91 20 0000 0000" />
+          </MemoryRouter>
+        </I18nProvider>
+      </ServicesContext.Provider>,
+    );
+    await act(() => new Promise((r) => setTimeout(r, 50)));
+    expect(screen.getByRole('link', { name: 'Call 24M: +91 20 0000 0000' })).toBeInTheDocument();
   });
 });

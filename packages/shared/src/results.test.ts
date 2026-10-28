@@ -6,6 +6,7 @@ import { isCouponResult } from './results.ts';
 describe('results', () => {
   it('guards result codes', () => {
     expect(isCouponResult('VALIDATED')).toBe(true);
+    expect(isCouponResult('ALREADY_CLOSED')).toBe(true);
     expect(isCouponResult('NOPE')).toBe(false);
     expect(isCouponResult(1)).toBe(false);
   });

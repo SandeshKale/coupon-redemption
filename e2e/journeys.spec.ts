@@ -188,7 +188,8 @@ test.describe('journeys (stubbed API)', () => {
   test('a wrong check character never reaches the network', async ({ page }) => {
     let calls = 0;
     await page.route('http://api.e2e.test/**', (route) => {
-      calls += 1;
+      // The page header reads the helpline in the background; that is not a coupon check.
+      if (!route.request().url().endsWith('/rpc/public_helpline')) calls += 1;
       return route.fulfill({ json: [] });
     });
     await page.goto(`/c/${CODE.slice(0, 12)}0`);

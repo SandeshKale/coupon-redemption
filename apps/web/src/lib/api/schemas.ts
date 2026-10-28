@@ -42,7 +42,7 @@ export type ValidationList = v.InferOutput<typeof ValidationList>;
 export const PublicInfo = v.object({
   result: v.picklist(['GENUINE', 'NOT_RECOGNISED', 'INVALID_FORMAT', 'RATE_LIMITED']),
   value_paise: v.optional(v.number()),
-  state: v.optional(v.picklist(['ACTIVE', 'VALIDATED', 'EXPIRED'])),
+  state: v.optional(v.picklist(['ACTIVE', 'VALIDATED', 'REDEEMED', 'EXPIRED'])),
   helpline: v.optional(v.nullable(v.string())),
 });
 export type PublicInfo = v.InferOutput<typeof PublicInfo>;
@@ -58,6 +58,8 @@ export const CouponStats = v.object({
     all: Count,
     active: Count,
     validated: Count,
+    validated_open: Count,
+    redeemed: Count,
     validated_today: Count,
     validated_7d: Count,
     validated_30d: Count,
@@ -68,6 +70,7 @@ export const CouponStats = v.object({
       quantity: Count,
       active: Count,
       validated: Count,
+      redeemed: Count,
       not_active: Count,
     }),
   ),

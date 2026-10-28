@@ -2,9 +2,9 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router';
 
+import { LiveRoutes } from './app/LiveRoutes.tsx';
 import { notifyUpdate } from './app/UpdateBanner.tsx';
 import { prefetchDealerRoutes } from './app/lazy.ts';
-import { AppRoutes } from './app/routes.tsx';
 import { prefetchAuthWhenIdle } from './lib/auth/client.ts';
 import { config } from './lib/config.ts';
 import { I18nProvider } from './lib/i18n/index.ts';
@@ -42,7 +42,7 @@ if (root !== null) {
       <ServicesContext.Provider value={services}>
         <I18nProvider>
           <BrowserRouter>
-            <AppRoutes helpline={config.helpline} />
+            <LiveRoutes helpline={config.helpline} />
           </BrowserRouter>
         </I18nProvider>
       </ServicesContext.Provider>

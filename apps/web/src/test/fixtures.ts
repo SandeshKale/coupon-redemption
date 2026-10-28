@@ -34,11 +34,22 @@ export const STATS = {
     all: 1000,
     active: 800,
     validated: 120,
+    validated_open: 20,
+    redeemed: 100,
     validated_today: 7,
     validated_7d: 40,
     validated_30d: 120,
   },
-  by_lot: [{ lot_no: 'LOT-001', quantity: 1000, active: 800, validated: 120, not_active: 80 }],
+  by_lot: [
+    {
+      lot_no: 'LOT-001',
+      quantity: 1000,
+      active: 800,
+      validated: 120,
+      redeemed: 100,
+      not_active: 80,
+    },
+  ],
   by_distributor: [
     { code: 'DIST-PUNE', name: 'Pune Paint Distributors', dealers: 8, validated: 120 },
   ],

@@ -28,6 +28,7 @@ import {
 } from './data.ts';
 import { GST_PATTERN, newDealerBody, PinReset } from './distributor.tsx';
 import { ActionForm, cols, intOrNull, nullIfEmpty, RowsView, Section, Status } from './parts.tsx';
+import { HelplineSection, MobileChange, RedeemOne } from './redeem.tsx';
 
 interface LotOption {
   readonly value: string;
@@ -250,6 +251,7 @@ export function MastersPage(): ReactNode {
       <AddRepSection options={options} />
       <AddDealerSection options={options} />
       <SkusSection />
+      <HelplineSection />
       <DealersMaster />
     </div>
   );
@@ -275,7 +277,7 @@ function DistributorsSection({ query }: { readonly query: ReturnType<typeof useR
         pending={act.pending}
         fields={[
           { name: 'name', label: 'm24.distName' },
-          { name: 'code', label: 'm24.distCode', pattern: '[A-Za-z0-9\\-]{2,20}' },
+          { name: 'code', label: 'm24.distCode', pattern: '[A-Za-z0-9/\\-]{2,20}' },
           { name: 'mobile', label: 'm24.distMobile', type: 'tel' },
           { name: 'pin', label: 'col.pin', type: 'pin' },
         ]}
@@ -441,7 +443,7 @@ export function UsersPage(): ReactNode {
         caption={i.t('nav.users')}
         csvName="users"
         columns={[
-          ...cols(i.t, ['id', 'name', 'role', 'is_sales_rep', 'status']),
+          ...cols(i.t, ['id', 'name', 'mobile_e164', 'role', 'is_sales_rep', 'status']),
           {
             key: 'actions',
             label: i.t('col.actions'),
@@ -479,7 +481,8 @@ function UserActions({ row, call }: { readonly row: Row; readonly call: Call }):
   const active = str(row, 'status') === 'ACTIVE';
   return (
     <span className="flex flex-wrap items-end gap-2">
-      {str(row, 'role').startsWith('M24_') ? null : <PinReset userId={num(row, 'id')} />}
+      <MobileChange userId={num(row, 'id')} />
+      {str(row, 'role') === 'DISTRIBUTOR' ? <PinReset userId={num(row, 'id')} /> : null}
       <Button
         variant={active ? 'danger' : 'secondary'}
         onClick={() =>
@@ -518,6 +521,8 @@ export function DashboardPage(): ReactNode {
     ['stats.all', d.totals.all],
     ['stats.active', d.totals.active],
     ['stats.validated', d.totals.validated],
+    ['stats.validatedOpen', d.totals.validated_open],
+    ['stats.redeemed', d.totals.redeemed],
     ['stats.today', d.totals.validated_today],
     ['stats.week', d.totals.validated_7d],
     ['stats.month', d.totals.validated_30d],
@@ -546,7 +551,11 @@ export function DashboardPage(): ReactNode {
       <p className="text-sm text-muted">
         {i.t('common.lastUpdated', { time: i.dateTime(d.as_of) })}
       </p>
-      {table(d.by_lot, ['lot_no', 'quantity', 'not_active', 'active', 'validated'], 'stats.byLot')}
+      {table(
+        d.by_lot,
+        ['lot_no', 'quantity', 'not_active', 'active', 'validated', 'redeemed'],
+        'stats.byLot',
+      )}
       {table(d.by_distributor, ['code', 'name', 'dealers', 'validated'], 'stats.byDistributor')}
       {table(d.top_dealers, ['dealer', 'distributor', 'validated'], 'stats.topDealers')}
       {table(
@@ -591,7 +600,12 @@ export function LookupPage({ role }: { readonly role: string }): ReactNode {
       </form>
       {result?.['found'] === false ? <ErrorState message={i.t('result.not_found')} /> : null}
       {result !== null && typeof coupon === 'object' && coupon !== null ? (
-        <CouponCard result={result} coupon={coupon as Row} admin={role === 'M24_ADMIN'} />
+        <CouponCard
+          result={result}
+          coupon={coupon as Row}
+          admin={role === 'M24_ADMIN'}
+          canRedeem={role === 'M24_ADMIN' || role === 'M24_FINANCE'}
+        />
       ) : null}
     </div>
   );
@@ -601,10 +615,12 @@ function CouponCard({
   result,
   coupon,
   admin,
+  canRedeem,
 }: {
   readonly result: Row;
   readonly coupon: Row;
   readonly admin: boolean;
+  readonly canRedeem: boolean;
 }): ReactNode {
   const i = useI18n();
   const events = Array.isArray(result['events']) ? (result['events'] as Row[]) : [];
@@ -620,6 +636,9 @@ function CouponCard({
         caption={i.t('nav.lookup')}
         columns={cols(i.t, ['event', 'from', 'to', 'by', 'ref', 'at'])}
       />
+      {canRedeem && ['ACTIVE', 'VALIDATED'].includes(str(coupon, 'status')) ? (
+        <RedeemOne serial={str(coupon, 'serial')} />
+      ) : null}
       {admin ? <AdminCouponActions couponId={num(coupon, 'id')} /> : null}
     </Section>
   );

@@ -69,7 +69,10 @@ insert into matrix values
   ($$public.validate_coupon('x')$$, '{DEALER_OWNER,DEALER_STAFF}'),
   ($$public.my_validations(1, null)$$, '{DEALER_OWNER,DEALER_STAFF}'),
   ($$public.coupon_stats()$$, '{M24_ADMIN,M24_FINANCE,M24_VIEWER}'),
-  ($$public.list_dealers(null)$$, '{M24_ADMIN,M24_FINANCE,M24_VIEWER,DISTRIBUTOR}');
+  ($$public.list_dealers(null)$$, '{M24_ADMIN,M24_FINANCE,M24_VIEWER,DISTRIBUTOR}'),
+  ($$public.redeem_coupons(array['x'], null)$$, '{M24_ADMIN,M24_FINANCE}'),
+  ($$public.update_user_mobile(0, '+919000000097')$$, '{M24_ADMIN}'),
+  ($$public.set_helpline('+91 98000 00000')$$, '{M24_ADMIN}');
 
 create temp table who (label text, role text);
 insert into who values ('Owner A', 'DEALER_OWNER'), ('Staff A', 'DEALER_STAFF'), ('Distributor Pune', 'DISTRIBUTOR'),
@@ -100,7 +103,7 @@ from matrix m;
 
 select is((select count(*)::int from pg_proc p join pg_namespace n on n.oid = p.pronamespace
             where n.nspname = 'public' and has_function_privilege('authenticated', p.oid, 'execute')
-              and p.proname not in ('public_coupon_info', 'rls_user', 'rls_role', 'rls_user_id', 'rls_dealer_id', 'rls_distributor_id',
+              and p.proname not in ('public_coupon_info', 'public_helpline', 'rls_user', 'rls_role', 'rls_user_id', 'rls_dealer_id', 'rls_distributor_id',
                                     'rls_is_m24', 'jwt_claim', 'cfg', 'cfg_int', 'cfg_bool', 'cfg_text')
               and not exists (select 1 from matrix m where m.expr like '%public.' || p.proname || '(%')),
   0, 'every function granted to authenticated is in the role matrix');

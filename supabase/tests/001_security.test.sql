@@ -10,7 +10,7 @@ select is(
 select is(
   (select array_agg(p.proname::text order by p.proname) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public' and has_function_privilege('anon', p.oid, 'execute')),
-  array['public_coupon_info'], 'anon can execute only public_coupon_info (§12.3)');
+  array['public_coupon_info', 'public_helpline'], 'anon can execute only the public coupon lookup and the helpline (§12.3)');
 
 select is(
   (select count(*)::int from information_schema.role_table_grants

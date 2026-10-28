@@ -25,6 +25,7 @@ const FIXED: Record<
   REDEEMED: ['valid', 'result.validated'],
   PARTIAL: ['valid', 'result.validated'],
   ALREADY_REDEEMED_OTHER: ['warning', 'result.already_other'],
+  ALREADY_CLOSED: ['invalid', 'result.already_closed'],
   NOT_FOUND: ['invalid', 'result.not_found'],
   NOT_ACTIVE: ['invalid', 'result.not_active'],
   BLOCKED: ['invalid', 'result.blocked'],

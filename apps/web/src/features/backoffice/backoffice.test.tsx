@@ -592,10 +592,11 @@ describe('24M', () => {
     expect(calls['admin-create-user']).toBeUndefined();
   });
 
-  it('users: PIN reset, status changes and adding 24M staff', async () => {
+  it('users: admin sets distributor PINs only, changes mobiles, switches logins, adds 24M staff', async () => {
     signIn('u', 'aal2');
     const calls = captureFunctions();
     const pins: unknown[] = [];
+    const mobiles: unknown[] = [];
     rest({
       app_user: [
         { id: 1, name: 'Owner A', role: 'DEALER_OWNER', status: 'ACTIVE' },
@@ -603,13 +604,28 @@ describe('24M', () => {
         { id: 9, name: 'Finance', role: 'M24_FINANCE', status: 'INACTIVE' },
       ],
     });
-    rpc({ set_user_pin: (a) => (pins.push(a), null) });
+    rpc({
+      set_user_pin: (a) => (pins.push(a), null),
+      update_user_mobile: (a) => (mobiles.push(a), null),
+    });
     open('M24_ADMIN', '/m/users');
     const owner = (await screen.findByText('Owner A')).closest('tr')!;
-    await userEvent.click(within(owner).getByRole('button', { name: 'Set new PIN' }));
-    await userEvent.type(within(owner).getByLabelText('4-digit PIN'), '2468');
-    await userEvent.click(within(owner).getByRole('button', { name: 'Save' }));
-    expect(await within(owner).findByText('PIN updated.')).toBeInTheDocument();
+    // A dealer's PIN is set by their distributor or rep, not by 24M.
+    expect(within(owner).queryByRole('button', { name: 'Set new PIN' })).not.toBeInTheDocument();
+    const rep = screen.getByText('Rep One').closest('tr')!;
+    await userEvent.click(within(rep).getByRole('button', { name: 'Set new PIN' }));
+    await userEvent.type(within(rep).getByLabelText('4-digit PIN'), '2468');
+    await userEvent.click(within(rep).getByRole('button', { name: 'Save' }));
+    expect(await within(rep).findByText('PIN updated.')).toBeInTheDocument();
+    // Any registered mobile number can be changed by 24M.
+    await userEvent.click(within(owner).getByRole('button', { name: 'Change mobile' }));
+    const save = within(owner).getByRole('button', { name: 'Save' });
+    expect(save).toBeDisabled();
+    await userEvent.type(within(owner).getByLabelText('New mobile number'), '98111 00001');
+    await userEvent.click(save);
+    await waitFor(() => {
+      expect(mobiles).toEqual([{ p_user_id: 1, p_mobile: '+919811100001' }]);
+    });
     await userEvent.click(within(owner).getByRole('button', { name: 'Switch off' }));
     const fin = screen.getByText('Finance').closest('tr')!;
     expect(within(fin).queryByRole('button', { name: 'Set new PIN' })).not.toBeInTheDocument();
@@ -623,11 +639,124 @@ describe('24M', () => {
         { name: 'Viewer', role: 'M24_VIEWER', email: 'v@24m.in' },
       ]);
     });
-    expect(pins).toEqual([{ p_user_id: 1, p_pin: '2468' }]);
+    expect(pins).toEqual([{ p_user_id: 5, p_pin: '2468' }]);
     expect(calls['admin-user-status']).toEqual([
       { user_id: 1, status: 'INACTIVE', reason: 'Changed by 24M admin' },
       { user_id: 9, status: 'ACTIVE', reason: 'Changed by 24M admin' },
     ]);
+  });
+
+  it('redeem: check the list, confirm, see what could not be redeemed', async () => {
+    signIn('u', 'aal2');
+    const sent: unknown[] = [];
+    rpc({
+      redeem_coupons: (a) => (
+        sent.push(a),
+        {
+          redeemed: 2,
+          serials: ['P24-0000001', 'P24-0000002'],
+          not_redeemable: [{ serial: 'P24-0000003', status: 'REDEEMED' }],
+          not_found: ['P24-0009999'],
+        }
+      ),
+    });
+    open('M24_FINANCE', '/m/redeem');
+    expect(await screen.findByRole('link', { name: 'Redeem coupons' })).toBeInTheDocument();
+    await userEvent.type(
+      screen.getByLabelText(/Serial numbers, one per line/),
+      'p24-0000001, P24-0000002\nP24-0000003 P24-0000003 P24-0009999',
+    );
+    await userEvent.type(screen.getByLabelText('Credit note number (optional)'), 'CN/26/001');
+    await userEvent.click(screen.getByRole('button', { name: 'Check list' }));
+    expect(screen.getByText('Redeem 4 coupons? This cannot be undone.')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByText(/This cannot be undone/)).not.toBeInTheDocument();
+    expect(sent).toEqual([]);
+    await userEvent.click(screen.getByRole('button', { name: 'Check list' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Yes, redeem' }));
+    expect(
+      await screen.findByText('Redeemed: 2. Not redeemable: 1. Not found: 1.'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('P24-0000003 (REDEEMED), P24-0009999 (–)')).toBeInTheDocument();
+    expect(sent).toEqual([
+      {
+        p_serials: ['P24-0000001', 'P24-0000002', 'P24-0000003', 'P24-0009999'],
+        p_credit_note: 'CN/26/001',
+      },
+    ]);
+  });
+
+  it('redeem: an empty list does nothing and a failed call says so', async () => {
+    signIn('u', 'aal2');
+    rpc({ redeem_coupons: err(500, 'x') });
+    open('M24_ADMIN', '/m/redeem');
+    await userEvent.type(await screen.findByLabelText(/Serial numbers, one per line/), ' , ');
+    await userEvent.click(screen.getByRole('button', { name: 'Check list' }));
+    expect(screen.queryByRole('button', { name: 'Yes, redeem' })).not.toBeInTheDocument();
+    await userEvent.clear(screen.getByLabelText(/Serial numbers, one per line/));
+    await userEvent.type(screen.getByLabelText(/Serial numbers, one per line/), 'P24-0000001');
+    await userEvent.click(screen.getByRole('button', { name: 'Check list' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Yes, redeem' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(/went wrong|Something/i);
+  });
+
+  it('lookup: admin and finance can mark a single coupon redeemed; viewers cannot', async () => {
+    signIn('u', 'aal2');
+    const sent: unknown[] = [];
+    rpc({
+      lookup_coupon: {
+        found: true,
+        coupon: { id: 11, serial: 'P24-0000001', status: 'VALIDATED', value_paise: 10000 },
+        events: [],
+      },
+      redeem_coupons: (a) => (sent.push(a), { redeemed: 1 }),
+    });
+    open('M24_FINANCE', '/m/lookup');
+    await userEvent.type(screen.getByLabelText('Serial or code'), 'P24-0000001');
+    await userEvent.click(screen.getByRole('button', { name: 'Search' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Mark redeemed' }));
+    await waitFor(() => {
+      expect(sent).toEqual([{ p_serials: ['P24-0000001'], p_credit_note: null }]);
+    });
+    expect(screen.queryByRole('button', { name: 'Hold' })).not.toBeInTheDocument();
+  });
+
+  it('lookup: no redeem button for viewers or for an already redeemed coupon', async () => {
+    signIn('u', 'aal2');
+    rpc({
+      lookup_coupon: {
+        found: true,
+        coupon: { id: 11, serial: 'P24-0000001', status: 'REDEEMED', value_paise: 10000 },
+        events: [],
+      },
+    });
+    open('M24_ADMIN', '/m/lookup');
+    await userEvent.type(screen.getByLabelText('Serial or code'), 'P24-0000001');
+    await userEvent.click(screen.getByRole('button', { name: 'Search' }));
+    await screen.findByRole('heading', { name: 'P24-0000001' });
+    expect(screen.queryByRole('button', { name: 'Mark redeemed' })).not.toBeInTheDocument();
+  });
+
+  it('masters: the helpline can be changed by the admin', async () => {
+    signIn('u', 'aal2');
+    const sent: unknown[] = [];
+    rest({ distributor: [], sku: [] });
+    rpc({
+      list_dealers: [],
+      public_helpline: '+91 98440 70070',
+      set_helpline: (a) => (sent.push(a), null),
+    });
+    open('M24_ADMIN', '/m/masters');
+    const box = (await screen.findByRole('heading', { name: 'Helpline number' })).closest(
+      'section',
+    )!;
+    const input = await within(box).findByDisplayValue('+91 98440 70070');
+    await userEvent.clear(input);
+    await userEvent.type(input, '+91-9844070071');
+    await userEvent.click(within(box).getByRole('button', { name: 'Save helpline' }));
+    await waitFor(() => {
+      expect(sent).toEqual([{ p_number: '+91-9844070071' }]);
+    });
   });
 
   it('viewers and finance see the dashboard, review and lookup but not the editing pages', async () => {

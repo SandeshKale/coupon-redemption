@@ -46,6 +46,7 @@ describe('CouponPage: what anyone sees', () => {
 
   it.each([
     ['VALIDATED', 'Status: Validated'],
+    ['REDEEMED', 'Status: Redeemed'],
     ['EXPIRED', 'Status: Expired'],
   ])('shows the %s status', async (state, text) => {
     rpc({ public_coupon_info: { result: 'GENUINE', value_paise: 10000, state } });
@@ -145,6 +146,7 @@ describe('CouponPage: a signed-in dealer', () => {
       { result: 'ALREADY_REDEEMED_OTHER', serial: 'P24-0000001' },
       'Already validated by another dealer.',
     ],
+    [{ result: 'ALREADY_CLOSED' }, 'Already redeemed. This coupon cannot be used again.'],
     [{ result: 'EXPIRED', expires_at: '2026-11-12T05:02:00Z' }, 'Coupon expired on 12 Nov 2026.'],
     [{ result: 'NOT_ACTIVE' }, 'This coupon is not active yet. Call 24M.'],
     [{ result: 'BLOCKED' }, 'This coupon is blocked. Call 24M.'],

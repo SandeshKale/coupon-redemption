@@ -53,7 +53,7 @@ export const DealerCsvRow = v.strictObject({
   name: v.pipe(v.string(), v.trim(), v.minLength(2), v.maxLength(120)),
   mobile: v.pipe(v.string(), v.trim(), v.maxLength(20)),
   city: v.optional(v.pipe(v.string(), v.trim(), v.maxLength(80))),
-  distributor_code: v.pipe(v.string(), v.trim(), v.regex(/^[A-Za-z0-9-]{2,20}$/)),
+  distributor_code: v.pipe(v.string(), v.trim(), v.regex(/^[A-Za-z0-9/-]{2,20}$/)),
 });
 
 export async function readJson<T extends v.GenericSchema>(

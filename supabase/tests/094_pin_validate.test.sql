@@ -63,9 +63,9 @@ select is(tests.state('Distributor Pune', $$public.set_user_pin(1, '2468')$$), '
 select is(tests.call('service', $$public.pin_login_check('+919800000001', '2468', '10.0.0.4')$$) ->> 'result', 'OK', 'the new PIN works');
 select is(tests.state('Distributor Pune', $$public.set_user_pin(12, '2468')$$), 'PT403', 'a distributor cannot set the PIN of another distributor''s dealer');
 select is(tests.state('Owner A', $$public.set_user_pin(1, '2468')$$), 'PT403', 'a dealer cannot set PINs');
-select is(tests.err('Admin', $$public.set_user_pin(1, '1234')$$), 'WEAK_PIN', 'a weak PIN is refused');
+select is(tests.err('Distributor Pune', $$public.set_user_pin(1, '1234')$$), 'WEAK_PIN', 'a weak PIN is refused');
 select is(tests.err('Admin', $$public.set_user_pin(7, '2468')$$), 'USE_PASSWORD_LOGIN', '24M staff keep password login');
-select is(tests.state('Admin', $$public.set_user_pin(12, '3579')$$), 'OK', '24M sets any dealer PIN');
+select is(tests.state('Admin', $$public.set_user_pin(12, '3579')$$), 'PT403', '24M does not set dealer PINs (their distributor or rep does)');
 
 select is(tests.err('Owner A', $$public.change_my_pin('0000', '1357')$$), 'WRONG_PIN', 'changing needs the current PIN');
 select is(tests.state('Owner A', $$public.change_my_pin('2468', '1357')$$), 'OK', 'a dealer changes their own PIN');
@@ -92,7 +92,7 @@ select is((select is_sales_rep from public.app_user where id = (select uid from 
 
 -- ── Validate ────────────────────────────────────────────────────────────────
 select is(tests.call('Owner A', format('public.validate_coupon(%L)', tests.code13('P24-0000001'))) ->> 'result', 'VALIDATED', 'a dealer validates an active coupon');
-select is(tests.status('P24-0000001'), 'REDEEMED', 'the coupon is now validated');
+select is(tests.status('P24-0000001'), 'VALIDATED', 'the coupon is now validated');
 select is((select redeemed_dealer_id from public.coupon where serial = 'P24-0000001'), 1, 'it records which dealer validated it');
 select is((select count(*)::int from public.dealer_claim_line), 0, 'validating creates no claim line');
 select is((select count(*)::int from public.coupon_event where ref = 'validate'), 1, 'validating writes one event');

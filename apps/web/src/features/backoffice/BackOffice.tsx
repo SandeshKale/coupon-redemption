@@ -9,6 +9,7 @@ import { type Key, useI18n } from '../../lib/i18n/index.ts';
 import { QueryError } from './data.ts';
 import { DealersPage } from './distributor.tsx';
 import { DashboardPage, LookupPage, LotsPage, MastersPage, ReviewPage, UsersPage } from './m24.tsx';
+import { RedeemPage } from './redeem.tsx';
 
 /** Distributor and 24M back-office: one lazy chunk (TanStack Query lives only here). */
 function BackOffice({ profile }: { readonly profile: Profile }): ReactNode {
@@ -36,6 +37,9 @@ function BackOffice({ profile }: { readonly profile: Profile }): ReactNode {
         ['/m', 'nav.dashboard'],
         ['/m/review', 'nav.review'],
         ['/m/lookup', 'nav.lookup'],
+        ...(profile.role === 'M24_ADMIN' || profile.role === 'M24_FINANCE'
+          ? ([['/m/redeem', 'nav.redeem']] as [string, Key][])
+          : []),
         ...(profile.role === 'M24_ADMIN'
           ? ([
               ['/m/lots', 'nav.lots'],
@@ -55,6 +59,7 @@ function BackOffice({ profile }: { readonly profile: Profile }): ReactNode {
             <Route index element={<DashboardPage />} />
             <Route path="review" element={<ReviewPage role={profile.role} />} />
             <Route path="lookup" element={<LookupPage role={profile.role} />} />
+            <Route path="redeem" element={<RedeemPage />} />
             <Route path="lots" element={<LotsPage />} />
             <Route path="masters" element={<MastersPage />} />
             <Route path="users" element={<UsersPage />} />

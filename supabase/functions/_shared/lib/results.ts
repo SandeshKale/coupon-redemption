@@ -13,6 +13,7 @@ export const COUPON_RESULTS = [
   'EXPIRED',
   'ALREADY_REDEEMED_SELF',
   'ALREADY_REDEEMED_OTHER',
+  'ALREADY_CLOSED',
   'DEALER_INACTIVE',
   'TOO_MANY_INVALID',
   'AUTH_REQUIRED',
@@ -28,6 +29,7 @@ export function isCouponResult(value: unknown): value is CouponResult {
 export const COUPON_STATUSES = [
   'GENERATED',
   'ACTIVE',
+  'VALIDATED',
   'REDEEMED',
   'ON_HOLD',
   'DIST_CN_ISSUED',
