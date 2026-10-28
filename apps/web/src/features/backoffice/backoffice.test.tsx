@@ -230,6 +230,15 @@ describe('distributor and sales rep: dealers', () => {
     open('DISTRIBUTOR', '/d');
     await screen.findAllByText('Dealers');
     expect(screen.getByRole('link', { name: 'Change PIN' })).toHaveAttribute('href', '/pin');
+    const links: [string, string][] = [
+      ['Scan coupon', '/scan'],
+      ['Scan several coupons', '/batch'],
+      ['Type code', '/type'],
+      ['My validations', '/history'],
+    ];
+    for (const [name, href] of links) {
+      expect(screen.getByRole('link', { name })).toHaveAttribute('href', href);
+    }
     expect(screen.queryByRole('link', { name: /claim/i })).not.toBeInTheDocument();
   });
 });

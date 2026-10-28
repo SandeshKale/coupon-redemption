@@ -102,7 +102,7 @@ select is(tests.call('Owner Mumbai', format('public.validate_coupon(%L)', tests.
 select is(tests.call('Owner A', format('public.validate_coupon(%L)', tests.code13('P24-0000101'))) ->> 'result', 'NOT_ACTIVE', 'a coupon not yet activated is refused');
 select is(tests.call('Owner A', $$public.validate_coupon('nonsense')$$) ->> 'result', 'INVALID_FORMAT', 'a bad code is refused');
 select is(tests.call('Owner Inactive Dealer', format('public.validate_coupon(%L)', tests.code13('P24-0000003'))) ->> 'result', 'DEALER_INACTIVE', 'an inactive dealer cannot validate');
-select is(tests.state('Distributor Pune', $$public.validate_coupon('x')$$), 'PT403', 'a distributor cannot validate');
+select is(tests.state('Viewer', $$public.validate_coupon('x')$$), 'PT403', 'a 24M viewer cannot validate');
 select is(tests.state('anon', $$public.validate_coupon('x')$$), '42501', 'the public cannot validate');
 select tests.freeze(now() + interval '20 months');
 select is(tests.call('Owner A', format('public.validate_coupon(%L)', tests.code13('P24-0000004'))) ->> 'result', 'EXPIRED', 'an expired coupon cannot be validated');

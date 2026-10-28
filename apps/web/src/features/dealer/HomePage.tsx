@@ -66,6 +66,9 @@ export function HomePage(): ReactNode {
         <Link to="/type" className={BIG}>
           {i.t('home.type')}
         </Link>
+        <Link to="/batch" className={BIG}>
+          {i.t('home.batch')}
+        </Link>
       </nav>
       {home === null ? (
         failed ? (

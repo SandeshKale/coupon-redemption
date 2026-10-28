@@ -39,9 +39,9 @@ select is(tests.state('Admin', format('public.begin_lot_export(%s, %L)', (select
 select is((select count(*)::int from public.admin_log where action = 'EXPORT_LOT_START'), 2, 'both exports logged');
 
 -- Void spoiled prints, reconcile
-select is(tests.call('Admin', format('public.void_serials(%s, array[%L, %L], %L)', (select r ->> 'lot_id' from l), 'T26-0000001', 't26-0000002', 'spoiled')) ->> 'void', '2',
+select is(tests.call('Admin', format('public.void_serials(%s, array[%L, %L], %L)', (select r ->> 'lot_id' from l), public.make_serial('T26', 1), lower(public.make_serial('T26', 2)), 'spoiled')) ->> 'void', '2',
   'spoiled serials voided');
-select is(tests.call('Admin', format('public.void_serials(%s, array[%L], %L)', (select r ->> 'lot_id' from l), 'T26-0000001', 'again')) ->> 'msg', 'SERIALS_NOT_VOIDABLE',
+select is(tests.call('Admin', format('public.void_serials(%s, array[%L], %L)', (select r ->> 'lot_id' from l), public.make_serial('T26', 1), 'again')) ->> 'msg', 'SERIALS_NOT_VOIDABLE',
   'cannot void twice');
 select is(tests.call('Admin', format('public.lot_reconciliation(%s)', (select r ->> 'lot_id' from l))) ->> 'balanced', 'true', 'eligible + void = quantity');
 

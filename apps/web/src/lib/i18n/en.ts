@@ -260,7 +260,7 @@ export const en = {
   'result.already_closed': 'Already redeemed. This coupon cannot be used again.',
   'public.state.REDEEMED': 'Status: Redeemed',
   'nav.redeem': 'Redeem coupons',
-  'm24.redeemHelp': 'Serial numbers, one per line or separated by commas (for example P24-0000001)',
+  'm24.redeemHelp': 'Serial numbers, one per line or separated by commas (for example RA-860881-6)',
   'm24.creditNote': 'Credit note number (optional)',
   'm24.redeemCheck': 'Check list',
   'm24.redeemConfirm': 'Redeem {count} coupons? This cannot be undone.',
@@ -278,6 +278,18 @@ export const en = {
   'm24.helplineSaved': 'Helpline saved.',
   'm24.saveHelpline': 'Save helpline',
   'm24.mobileHint': 'Enter a 10-digit mobile number.',
+  'nav.back': 'Back',
+  'home.batch': 'Scan several coupons',
+  'batch.title': 'Scan several coupons',
+  'batch.help':
+    'Scan one coupon after another. Valid ones are listed below. Then validate them all together.',
+  'batch.count': '{n} coupons in the list',
+  'batch.validateAll': 'Validate {n} coupons',
+  'batch.none': 'Scan a valid coupon first',
+  'batch.summary': 'Validated {done} of {total}',
+  'batch.remove': 'Remove',
+  'batch.duplicate': 'Already in the list.',
+  'batch.checking': 'Checking…',
 } as const;
 
 export type Key = keyof typeof en;

@@ -10,11 +10,12 @@ vi.mock('../../lib/auth/client.ts', () => ({
   loadAuthClient: () => Promise.resolve({ signOut: () => Promise.resolve({ error: null }) }),
 }));
 
-import { CODE, HOME, VALID, VALIDATED } from '../../test/fixtures.ts';
+import { CODE, CODE2, HOME, VALID, VALIDATED } from '../../test/fixtures.ts';
 import { renderAt, signIn } from '../../test/render.tsx';
 import { scanned } from '../../test/scanner-stub.tsx';
 import { API, err, rpc, server } from '../../test/server.ts';
 
+import { BatchPage } from './BatchPage.tsx';
 import { CouponPage, HOME_URL } from './CouponPage.tsx';
 import { HistoryPage } from './HistoryPage.tsx';
 import { HomePage } from './HomePage.tsx';
@@ -40,7 +41,7 @@ describe('CouponPage: what anyone sees', () => {
     );
     const home = screen.getByRole('link', { name: 'Go to 24M home page' });
     expect(home).toHaveAttribute('href', HOME_URL);
-    expect(HOME_URL).toBe('https://24m.in');
+    expect(HOME_URL).toBe('https://24m.in/primer');
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
@@ -374,5 +375,70 @@ describe('Home, history, PIN, type, scan', () => {
       screen.getByRole('button', { name: `scan https://c.example.in/c/${CODE}` }),
     );
     expect(await screen.findByText('navigated')).toBeInTheDocument();
+  });
+});
+
+describe('BatchPage: several coupons at once', () => {
+  const second = `https://c.example.in/c/${CODE2}`;
+  it('lists each scan with its status, refuses duplicates, and validates the valid ones together', async () => {
+    signIn();
+    scanned.push(`https://c.example.in/c/${CODE}`, second, 'https://x.brand/p');
+    const validated: unknown[] = [];
+    rpc({
+      check_coupon: (a) =>
+        a['p_code'] === CODE
+          ? VALID
+          : { result: 'ALREADY_REDEEMED_OTHER', code: CODE2, serial: 'RA-860881-6' },
+      validate_coupon: (a) => (validated.push(a['p_code']), VALIDATED),
+    });
+    renderAt(<BatchPage />, { path: '/batch', route: '/batch' });
+    expect(screen.getByRole('button', { name: 'Validate 0 coupons' })).toBeDisabled();
+    await userEvent.click(
+      screen.getByRole('button', { name: `scan https://c.example.in/c/${CODE}` }),
+    );
+    await userEvent.click(screen.getByRole('button', { name: `scan ${second}` }));
+    expect(await screen.findByText('Valid coupon · ₹100')).toBeInTheDocument();
+    expect(await screen.findByText('Already validated by another dealer.')).toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole('button', { name: `scan https://c.example.in/c/${CODE}` }),
+    );
+    expect(screen.getByText('Already in the list.')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'scan https://x.brand/p' }));
+    expect(screen.getByText('Not a 24M coupon.')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Validate 1 coupons' }));
+    expect(await screen.findByText('Validated 1 of 2')).toBeInTheDocument();
+    expect(validated).toEqual([CODE]);
+  });
+
+  it('a coupon can be removed and typed in, and a refused validation is shown', async () => {
+    signIn();
+    rpc({
+      check_coupon: VALID,
+      validate_coupon: { result: 'ALREADY_REDEEMED_OTHER', code: CODE, serial: 'P24-0000001' },
+    });
+    renderAt(<BatchPage />, { path: '/batch', route: '/batch' });
+    await userEvent.type(screen.getByLabelText('Coupon code (13 characters)'), CODE);
+    await userEvent.click(screen.getByRole('button', { name: 'Check coupon' }));
+    expect(await screen.findByText('Valid coupon · ₹100')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Remove' }));
+    expect(screen.queryByText('Valid coupon · ₹100')).not.toBeInTheDocument();
+    await userEvent.clear(screen.getByLabelText('Coupon code (13 characters)'));
+    await userEvent.type(screen.getByLabelText('Coupon code (13 characters)'), CODE);
+    await userEvent.click(screen.getByRole('button', { name: 'Check coupon' }));
+    await screen.findByText('Valid coupon · ₹100');
+    await userEvent.click(screen.getByRole('button', { name: 'Validate 1 coupons' }));
+    expect(await screen.findByText('Already validated by another dealer.')).toBeInTheDocument();
+  });
+
+  it('a failed check says so and offers no validation', async () => {
+    signIn();
+    rpc({ check_coupon: err(500, 'x') });
+    renderAt(<BatchPage />, { path: '/batch', route: '/batch' });
+    await userEvent.type(screen.getByLabelText('Coupon code (13 characters)'), CODE);
+    await userEvent.click(screen.getByRole('button', { name: 'Check coupon' }));
+    expect(
+      await screen.findByText('No internet. Try again when you are online.'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Validate 0 coupons' })).toBeDisabled();
   });
 });

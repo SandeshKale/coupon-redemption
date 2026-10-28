@@ -10,7 +10,7 @@ grant select on ctx to authenticated, anon, service_role;
 
 create temp table matrix (expr text, allowed text[]);
 insert into matrix values
-  ($$public.check_coupon('x')$$, '{DEALER_OWNER,DEALER_STAFF}'),
+  ($$public.check_coupon('x')$$, '{DEALER_OWNER,DEALER_STAFF,DISTRIBUTOR}'),
   ($$public.redeem(array['x'], gen_random_uuid())$$, '{DEALER_OWNER,DEALER_STAFF}'),
   ($$public.redemption_outcome(gen_random_uuid())$$, '{DEALER_OWNER,DEALER_STAFF}'),
   ($$public.batch_status(0)$$, '{DEALER_OWNER,DEALER_STAFF}'),
@@ -66,8 +66,8 @@ insert into matrix values
   ($$(select count(*) from public.recon_summary(current_date))$$, '{M24_ADMIN,M24_FINANCE,M24_VIEWER,DISTRIBUTOR}'),
   ($$public.set_user_pin(0, '2468')$$, '{M24_ADMIN,DISTRIBUTOR}'),
   ($$public.change_my_pin('0000', '2468')$$, '{DEALER_OWNER,DEALER_STAFF,DISTRIBUTOR}'),
-  ($$public.validate_coupon('x')$$, '{DEALER_OWNER,DEALER_STAFF}'),
-  ($$public.my_validations(1, null)$$, '{DEALER_OWNER,DEALER_STAFF}'),
+  ($$public.validate_coupon('x')$$, '{DEALER_OWNER,DEALER_STAFF,DISTRIBUTOR}'),
+  ($$public.my_validations(1, null)$$, '{DEALER_OWNER,DEALER_STAFF,DISTRIBUTOR}'),
   ($$public.coupon_stats()$$, '{M24_ADMIN,M24_FINANCE,M24_VIEWER}'),
   ($$public.list_dealers(null)$$, '{M24_ADMIN,M24_FINANCE,M24_VIEWER,DISTRIBUTOR}'),
   ($$public.redeem_coupons(array['x'], null)$$, '{M24_ADMIN,M24_FINANCE}'),

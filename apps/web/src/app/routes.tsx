@@ -8,7 +8,7 @@ import { Skeleton } from '../ui/index.ts';
 
 import { BackOfficeRoute, RoleGate } from './Gate.tsx';
 import { Shell } from './Shell.tsx';
-import { HistoryPage, LoginPage, PinPage, PrivacyPage, ScanPage } from './lazy.ts';
+import { BatchPage, HistoryPage, LoginPage, PinPage, PrivacyPage, ScanPage } from './lazy.ts';
 
 const DEALER = ['DEALER_OWNER', 'DEALER_STAFF'] as const;
 const PIN_USERS = ['DEALER_OWNER', 'DEALER_STAFF', 'DISTRIBUTOR'] as const;
@@ -61,15 +61,23 @@ function dealerRoutes(): ReactNode {
       <Route
         path="scan"
         element={
-          <Gated roles={DEALER}>
+          <Gated roles={PIN_USERS}>
             <ScanPage />
+          </Gated>
+        }
+      />
+      <Route
+        path="batch"
+        element={
+          <Gated roles={PIN_USERS}>
+            <BatchPage />
           </Gated>
         }
       />
       <Route
         path="history"
         element={
-          <Gated roles={DEALER}>
+          <Gated roles={PIN_USERS}>
             <HistoryPage />
           </Gated>
         }

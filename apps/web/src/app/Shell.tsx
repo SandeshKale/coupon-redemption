@@ -29,6 +29,32 @@ function LogoutButton(): ReactNode {
   );
 }
 
+const NO_BACK = new Set(['/', '/login', '/d', '/m']);
+
+/** Back on every page except the entry pages. With no earlier page in the app it goes home. */
+function BackButton(): ReactNode {
+  const { t } = useI18n();
+  const navigate = useNavigate();
+  const { pathname, key } = useLocation();
+  const path = pathname.length > 1 ? pathname.replace(/\/$/, '') : pathname;
+  if (NO_BACK.has(path)) return null;
+  const home = path.startsWith('/d/') ? '/d' : path.startsWith('/m/') ? '/m' : '/';
+  return (
+    <a
+      href={home}
+      className="inline-flex min-h-12 items-center font-semibold underline underline-offset-4"
+      onClick={(e) => {
+        e.preventDefault();
+        if (key === 'default') void navigate(home);
+        else void navigate(-1);
+      }}
+    >
+      {'← '}
+      {t('nav.back')}
+    </a>
+  );
+}
+
 /** Header (language switch + help in the same place on every screen, 3.2.6), banners, outlet. */
 export function Shell({ helpline }: { readonly helpline: string | null }): ReactNode {
   const { t } = useI18n();
@@ -45,9 +71,12 @@ export function Shell({ helpline }: { readonly helpline: string | null }): React
         </a>
       ) : null}
       <header className="flex flex-wrap items-center justify-between gap-2 py-3">
-        <Link to="/" className="text-xl font-bold">
-          {t('app.name')}
-        </Link>
+        <span className="flex flex-wrap items-center gap-3">
+          <Link to="/" className="text-xl font-bold">
+            {t('app.name')}
+          </Link>
+          <BackButton />
+        </span>
         <span className="flex flex-wrap items-center gap-3">
           <LanguageSwitch />
           <HelpLink phone={helpline} />

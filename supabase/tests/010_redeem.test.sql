@@ -18,7 +18,7 @@ select is(tests.call('Owner A', format('public.check_coupon(%L)', left(tests.cod
   || case when right(tests.code13('P24-0000001'), 1) = '0' then '1' else '0' end)) ->> 'result', 'INVALID_FORMAT', 'R1-01 wrong check character');
 select is(tests.call('Owner Inactive Dealer', format('public.check_coupon(%L)', tests.code13('P24-0000001'))) ->> 'result', 'DEALER_INACTIVE', 'R1-07 inactive dealer');
 select is(tests.state('Inactive Staff', format('public.check_coupon(%L)', tests.code13('P24-0000001'))), 'PT403', 'R1-09 inactive user is FORBIDDEN');
-select is(tests.state('Distributor Pune', format('public.check_coupon(%L)', tests.code13('P24-0000001'))), 'PT403', 'R1-09 wrong role is FORBIDDEN');
+select is(tests.state('Viewer', format('public.check_coupon(%L)', tests.code13('P24-0000001'))), 'PT403', 'R1-09 wrong role is FORBIDDEN');
 select is(tests.state('anon', format('public.check_coupon(%L)', tests.code13('P24-0000001'))), '42501', 'anon cannot call check_coupon');
 select is(tests.state('00000000-0000-0000-0000-0000000000ff', $$public.check_coupon('x')$$), 'PT401', 'unknown auth user → AUTH_REQUIRED');
 

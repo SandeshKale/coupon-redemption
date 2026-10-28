@@ -31,6 +31,10 @@ function BackOffice({ profile }: { readonly profile: Profile }): ReactNode {
   const links: [string, Key][] = isDist
     ? [
         ['/d', 'nav.dealers'],
+        ['/scan', 'home.scan'],
+        ['/batch', 'home.batch'],
+        ['/type', 'home.type'],
+        ['/history', 'nav.history'],
         ['/pin', 'nav.pin'],
       ]
     : [

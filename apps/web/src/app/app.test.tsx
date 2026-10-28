@@ -163,6 +163,50 @@ describe('Shell: log out', () => {
   });
 });
 
+describe('Shell: back', () => {
+  it('is not on the entry pages and goes home when there is nothing earlier', async () => {
+    app('/login');
+    await screen.findByRole('heading', { name: 'Log in' });
+    expect(screen.queryByRole('link', { name: /Back/ })).not.toBeInTheDocument();
+  });
+
+  it('is on other pages and goes back to the page before', async () => {
+    render(
+      <ServicesContext.Provider value={testServices()}>
+        <I18nProvider lang="en">
+          <MemoryRouter initialEntries={['/login', '/privacy']} initialIndex={1}>
+            <AppRoutes helpline={null} />
+          </MemoryRouter>
+        </I18nProvider>
+      </ServicesContext.Provider>,
+    );
+    await userEvent.click(await screen.findByRole('link', { name: /Back/ }));
+    expect(await screen.findByRole('heading', { name: 'Log in' })).toBeInTheDocument();
+  });
+
+  it('a page opened first goes home', async () => {
+    app('/privacy');
+    await userEvent.click(await screen.findByRole('link', { name: /Back/ }));
+    expect(await screen.findByRole('heading', { name: 'Log in' })).toBeInTheDocument();
+  });
+});
+
+describe('a distributor can scan, type and see validations', () => {
+  it.each<[string, string]>([
+    ['/scan', 'Scan coupon'],
+    ['/batch', 'Scan several coupons'],
+    ['/history', 'My validations'],
+  ])('%s opens for a distributor', async (route, title) => {
+    signIn('u-d');
+    rest({
+      app_user: [{ id: 5, name: 'D', role: 'DISTRIBUTOR', dealer_id: null, distributor_id: 1 }],
+    });
+    rpc({ my_validations: [] });
+    app(route);
+    expect(await screen.findByRole('heading', { name: title })).toBeInTheDocument();
+  });
+});
+
 describe('UpdateBanner (EC-055)', () => {
   it('appears when a new version waits and applies on request', async () => {
     const apply = vi.fn(() => Promise.resolve());
