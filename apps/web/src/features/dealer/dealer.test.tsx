@@ -40,7 +40,7 @@ describe('CouponPage: what anyone sees', () => {
     );
     const home = screen.getByRole('link', { name: 'Go to 24M home page' });
     expect(home).toHaveAttribute('href', HOME_URL);
-    expect(HOME_URL).toBe('https://www.24m.in');
+    expect(HOME_URL).toBe('https://24m.in');
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 

@@ -55,7 +55,7 @@ test.describe('journeys (stubbed API)', () => {
     await expect(page.getByRole('link', { name: 'Login to validate' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Go to 24M home page' })).toHaveAttribute(
       'href',
-      'https://www.24m.in',
+      'https://24m.in',
     );
     await expect(page.getByRole('button')).toHaveCount(0);
   });

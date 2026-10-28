@@ -12,7 +12,7 @@ import { Banner, Button, ResultCard, Skeleton } from '../../ui/index.ts';
 
 import { failureView, resultView } from './resultCopy.ts';
 
-export const HOME_URL = 'https://www.24m.in';
+export const HOME_URL = 'https://24m.in';
 
 type View =
   | { kind: 'loading' }
