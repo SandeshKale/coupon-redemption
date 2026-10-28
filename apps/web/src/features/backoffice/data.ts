@@ -4,7 +4,8 @@ import * as v from 'valibot';
 
 import type { ApiFailure } from '../../lib/api/client.ts';
 import { type Row, JsonArray } from '../../lib/api/schemas.ts';
-import { type Key, useI18n } from '../../lib/i18n/index.ts';
+import { ERRORS } from '../../lib/i18n/errors.ts';
+import { useI18n } from '../../lib/i18n/index.ts';
 import { useServices } from '../../lib/services.ts';
 
 export class QueryError extends Error {
@@ -101,43 +102,10 @@ export function summarise(data: unknown): string {
     .join(', ');
 }
 
-/** Business codes that have a plain-language explanation (English, Hindi, Kannada). */
-const EXPLAINED = new Set([
-  'LOT_NOT_EXPORTED',
-  'BAD_MFG_DATE',
-  'BAD_RANGE',
-  'UNKNOWN_SKU',
-  'NOT_FOUND',
-  'BAD_REQUEST',
-  'DUPLICATE_MOBILE',
-  'REASON_REQUIRED',
-  'DISTRIBUTOR_INACTIVE',
-  'USE_PASSWORD_LOGIN',
-  'BAD_ROLE',
-  'BAD_NAME',
-  'BAD_QUANTITY',
-  'BAD_MOBILE',
-  'CODE_GENERATION_STUCK',
-  'SERIES_FULL',
-  'BAD_PREFIX',
-  'SERIALS_NOT_VOIDABLE',
-  'NOT_REDEEMABLE',
-  'USER_INACTIVE',
-  'CANNOT_CHANGE_SELF',
-  'BAD_HELPLINE',
-  'PIN_REQUIRED',
-  'LOT_NOT_GENERATED',
-  'AUTH_REQUIRED',
-  'TOO_LARGE',
-  'BAD_HEADER',
-  'EMPTY',
-  'INTERNAL',
-]);
-
 /** The plain explanation of a refusal code, or undefined when the code has none. */
-export function explain(code: string, t: ReturnType<typeof useI18n>['t']): string | undefined {
-  if (code === 'WEAK_PIN') return t('pin.weak');
-  return EXPLAINED.has(code) ? t(`err.${code}` as Key) : undefined;
+export function explain(code: string, i: ReturnType<typeof useI18n>): string | undefined {
+  if (code === 'WEAK_PIN') return i.t('pin.weak');
+  return ERRORS[i.lang][code];
 }
 
 export function failureText(f: ApiFailure, t: ReturnType<typeof useI18n>['t']): string {

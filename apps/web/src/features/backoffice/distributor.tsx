@@ -122,7 +122,7 @@ export function PinReset({ userId }: { readonly userId: number }): ReactNode {
       setMsg({
         text:
           r.error.kind === 'business'
-            ? (explain(r.error.code, i.t) ?? i.t('common.error'))
+            ? (explain(r.error.code, i) ?? i.t('common.error'))
             : i.t('common.error'),
         error: true,
       });

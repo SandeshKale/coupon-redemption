@@ -41,9 +41,9 @@ export function Status({
   readonly message: string | null;
   readonly error: boolean;
 }): ReactNode {
-  const { t } = useI18n();
+  const i18n = useI18n();
   const ref = useReveal<HTMLParagraphElement>(message);
-  const hint = error && message !== null ? explain(message, t) : undefined;
+  const hint = error && message !== null ? explain(message, i18n) : undefined;
   return (
     <p
       ref={ref}
