@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { HttpResponse } from 'msw';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const auth = {
   signInWithPassword: vi.fn(),
   setSession: vi.fn(),
-  mfa: { listFactors: vi.fn(), enroll: vi.fn(), challengeAndVerify: vi.fn() },
+  mfa: { listFactors: vi.fn(), enroll: vi.fn(), unenroll: vi.fn(), challengeAndVerify: vi.fn() },
 };
 vi.mock('../../lib/auth/client.ts', () => ({ loadAuthClient: () => Promise.resolve(auth) }));
 
@@ -137,6 +137,62 @@ describe('LoginPage: 24M staff', () => {
       await screen.findByRole('img', { name: 'Authenticator setup QR code' }),
     ).toBeInTheDocument();
     expect(screen.getByText('SECRET')).toBeInTheDocument();
+  });
+
+  it('a set-up left half-way is cleared before a new one is made, with a fresh name', async () => {
+    auth.signInWithPassword.mockResolvedValue({ error: null });
+    auth.mfa.listFactors.mockResolvedValue({
+      data: {
+        totp: [],
+        all: [
+          { id: 'old1', status: 'unverified' },
+          { id: 'keep', status: 'verified' },
+          { id: 'old2', status: 'unverified' },
+        ],
+      },
+    });
+    auth.mfa.unenroll.mockResolvedValue({ error: null });
+    auth.mfa.enroll.mockResolvedValueOnce({
+      error: null,
+      data: { id: 'f3', totp: { qr_code: 'data:image/svg+xml;base64,PHN2Zy8+', secret: 'S2' } },
+    });
+    renderAt(<LoginPage />, { path: '/login', route: '/login' });
+    await staff();
+    expect(await screen.findByText('S2')).toBeInTheDocument();
+    expect(auth.mfa.unenroll.mock.calls).toEqual([[{ factorId: 'old1' }], [{ factorId: 'old2' }]]);
+    const arg = auth.mfa.enroll.mock.calls[0]?.[0] as { factorType: string; friendlyName: string };
+    expect(arg.factorType).toBe('totp');
+    expect(arg.friendlyName).toMatch(/^24M staff /);
+  });
+
+  it('a double tap on Log in signs in and enrols only once', async () => {
+    let release: () => void = () => undefined;
+    auth.signInWithPassword.mockImplementation(
+      () =>
+        new Promise((r) => {
+          release = () => {
+            r({ error: null });
+          };
+        }),
+    );
+    auth.mfa.listFactors.mockResolvedValue({ data: { totp: [] } });
+    auth.mfa.enroll.mockResolvedValue({
+      error: null,
+      data: { id: 'f4', totp: { qr_code: 'data:image/svg+xml;base64,PHN2Zy8+', secret: 'S3' } },
+    });
+    renderAt(<LoginPage />, { path: '/login', route: '/login' });
+    await userEvent.type(screen.getByLabelText('Email'), 'a@24m.in');
+    await userEvent.type(screen.getByLabelText('Password'), 'pw');
+    const form = screen.getByLabelText('Email').closest('form')!;
+    form.requestSubmit();
+    form.requestSubmit();
+    await waitFor(() => {
+      expect(auth.signInWithPassword).toHaveBeenCalled();
+    });
+    release();
+    expect(await screen.findByText('S3')).toBeInTheDocument();
+    expect(auth.signInWithPassword).toHaveBeenCalledTimes(1);
+    expect(auth.mfa.enroll).toHaveBeenCalledTimes(1);
   });
 
   it('enrolment error', async () => {

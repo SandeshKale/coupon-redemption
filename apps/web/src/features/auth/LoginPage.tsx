@@ -1,5 +1,5 @@
 import { normaliseE164 } from '@24m/shared';
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 
 import { loadAuthClient } from '../../lib/auth/client.ts';
@@ -118,6 +118,7 @@ function useM24Login(): {
   const navigate = useNavigate();
   const [step, setStep] = useState<Step>({ kind: 'password' });
   const [error, setError] = useState<string | null>(null);
+  const busy = useRef(false);
   const afterPassword = async (): Promise<void> => {
     const auth = await loadAuthClient();
     const { data } = await auth.mfa.listFactors();
@@ -127,7 +128,15 @@ function useM24Login(): {
       setStep({ kind: 'totp', factorId: totp.id });
       return;
     }
-    const enrolled = await auth.mfa.enroll({ factorType: 'totp' });
+    // A set-up left half-way leaves an unverified factor behind, and a new one cannot be added
+    // until it is removed. Clear them, then enrol with a name that is always new.
+    for (const stale of data?.all ?? []) {
+      if (stale.status === 'unverified') await auth.mfa.unenroll({ factorId: stale.id });
+    }
+    const enrolled = await auth.mfa.enroll({
+      factorType: 'totp',
+      friendlyName: `24M staff ${new Date().toISOString()}`,
+    });
     if (enrolled.error !== null) {
       setError(i.t('common.error'));
       return;
@@ -140,20 +149,27 @@ function useM24Login(): {
     });
   };
   const submit = async (email: string, password: string, code: string): Promise<void> => {
+    // A double tap must not start a second sign-in (a second enrolment would be refused).
+    if (busy.current) return;
+    busy.current = true;
     setError(null);
-    const auth = await loadAuthClient();
-    if (step.kind === 'password') {
-      const { error: e } = await auth.signInWithPassword({ email, password });
-      if (e !== null) setError(i.t('login.error'));
-      else await afterPassword();
-      return;
+    try {
+      const auth = await loadAuthClient();
+      if (step.kind === 'password') {
+        const { error: e } = await auth.signInWithPassword({ email, password });
+        if (e !== null) setError(i.t('login.error'));
+        else await afterPassword();
+        return;
+      }
+      const { error: e } = await auth.mfa.challengeAndVerify({
+        factorId: step.factorId,
+        code: code.replace(/\s/g, ''),
+      });
+      if (e !== null) setError(i.t('login.codeError'));
+      else void navigate('/');
+    } finally {
+      busy.current = false;
     }
-    const { error: e } = await auth.mfa.challengeAndVerify({
-      factorId: step.factorId,
-      code: code.replace(/\s/g, ''),
-    });
-    if (e !== null) setError(i.t('login.codeError'));
-    else void navigate('/');
   };
   return { step, error, submit };
 }
