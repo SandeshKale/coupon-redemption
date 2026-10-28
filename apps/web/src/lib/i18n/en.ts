@@ -282,6 +282,11 @@ export const en = {
   'home.batch': 'Scan several coupons',
   'common.show': 'Show',
   'common.hide': 'Hide',
+  'err.lotNotExported':
+    'This lot has not been exported for printing yet. Export the print file first.',
+  'err.badMfgDate': 'Manufacturing date cannot be in the future. Use today or an earlier date.',
+  'err.badRange': 'The serial numbers are outside this lot. Check From and To.',
+  'err.unknownSku': 'This product code is not in the product list.',
   'batch.title': 'Scan several coupons',
   'batch.help':
     'Scan one coupon after another. Valid ones are listed below. Then validate them all together.',
