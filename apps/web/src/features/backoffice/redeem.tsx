@@ -35,7 +35,7 @@ function ConfirmBar({
 }: {
   readonly count: number;
   readonly busy: boolean;
-  readonly onYes: () => void;
+  readonly onYes: () => unknown;
   readonly onCancel: () => void;
 }): ReactNode {
   const i = useI18n();
@@ -109,7 +109,7 @@ export function RedeemPage(): ReactNode {
           <ConfirmBar
             count={staged.serials.length}
             busy={busy}
-            onYes={() => void confirm()}
+            onYes={() => confirm()}
             onCancel={() => {
               setStaged(null);
             }}
@@ -135,7 +135,7 @@ export function RedeemOne({ serial }: { readonly serial: string }): ReactNode {
     <>
       <Button
         loading={act.pending}
-        onClick={() => void act.run('redeem_coupons', { p_serials: [serial], p_credit_note: null })}
+        onClick={() => act.run('redeem_coupons', { p_serials: [serial], p_credit_note: null })}
       >
         {i.t('m24.markRedeemed')}
       </Button>
@@ -203,7 +203,7 @@ export function MobileChange({ userId }: { readonly userId: number }): ReactNode
           <Button
             loading={act.pending}
             disabledReason={e164 === null ? i.t('m24.mobileHint') : null}
-            onClick={() => void save()}
+            onClick={() => save()}
           >
             {i.t('common.save')}
           </Button>

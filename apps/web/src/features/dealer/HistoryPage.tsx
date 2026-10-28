@@ -1,9 +1,10 @@
 import { type ReactNode, useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router';
 
 import { ValidationList } from '../../lib/api/schemas.ts';
 import { useI18n } from '../../lib/i18n/index.ts';
 import { useServices } from '../../lib/services.ts';
-import { Button, EmptyState, ErrorState, Money, Skeleton } from '../../ui/index.ts';
+import { Button, EmptyState, ErrorState, Icon, Money, Skeleton } from '../../ui/index.ts';
 
 const PAGE = 20;
 
@@ -34,11 +35,22 @@ export function HistoryPage(): ReactNode {
   useEffect(() => {
     void load(null);
   }, [load]);
-  if (rows === null) return error ? <ErrorState onRetry={() => void load(null)} /> : <Skeleton />;
+  if (rows === null) return error ? <ErrorState onRetry={() => load(null)} /> : <Skeleton />;
   return (
     <div className="flex flex-col gap-3">
       <h1 className="text-2xl font-bold">{i.t('history.title')}</h1>
-      {rows.length === 0 ? <EmptyState>{i.t('history.empty')}</EmptyState> : null}
+      {rows.length === 0 ? (
+        <>
+          <EmptyState>{i.t('history.empty')}</EmptyState>
+          <Link
+            to="/scan"
+            className="flex min-h-14 items-center justify-center gap-2 rounded-btn bg-success text-lg font-semibold text-white"
+          >
+            <Icon name="scan" />
+            {i.t('home.scan')}
+          </Link>
+        </>
+      ) : null}
       <ul className="flex flex-col gap-2">
         {rows.map((b) => (
           <li key={b.serial} className="flex flex-col gap-1 rounded-card border border-border p-3">
@@ -55,7 +67,7 @@ export function HistoryPage(): ReactNode {
       {more && rows.length > 0 ? (
         <Button
           variant="secondary"
-          onClick={() => void load(rows[rows.length - 1]?.validated_at ?? null)}
+          onClick={() => load(rows[rows.length - 1]?.validated_at ?? null)}
         >
           {i.t('history.more')}
         </Button>

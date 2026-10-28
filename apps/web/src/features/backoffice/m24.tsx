@@ -69,7 +69,7 @@ export function LotsPage(): ReactNode {
             label: i.t('col.actions'),
             render: (r) =>
               str(r, 'status') === 'GENERATING' ? (
-                <Button onClick={() => void generate(num(r, 'id'), num(r, 'quantity'))}>
+                <Button onClick={() => generate(num(r, 'id'), num(r, 'quantity'))}>
                   {i.t('m24.generate')}
                 </Button>
               ) : null,
@@ -486,7 +486,7 @@ function UserActions({ row, call }: { readonly row: Row; readonly call: Call }):
       <Button
         variant={active ? 'danger' : 'secondary'}
         onClick={() =>
-          void call('admin-user-status', {
+          call('admin-user-status', {
             user_id: num(row, 'id'),
             status: active ? 'INACTIVE' : 'ACTIVE',
             reason: 'Changed by 24M admin',

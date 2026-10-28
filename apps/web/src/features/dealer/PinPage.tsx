@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useRef, useState } from 'react';
 import * as v from 'valibot';
 
 import { useI18n } from '../../lib/i18n/index.ts';
@@ -16,11 +16,15 @@ export function PinPage(): ReactNode {
   const [again, setAgain] = useState('');
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const inFlight = useRef(false);
   const mismatch = again !== '' && again !== newPin;
   const invalid = !PIN.test(oldPin) || !PIN.test(newPin) || again !== newPin;
   const submit = async (): Promise<void> => {
+    if (inFlight.current) return;
+    inFlight.current = true;
     setBusy(true);
     const r = await api.rpc('change_my_pin', { p_old: oldPin, p_new: newPin }, v.unknown());
+    inFlight.current = false;
     setBusy(false);
     if (r.ok) {
       setMsg({ ok: true, text: i.t('pin.changed') });
@@ -92,6 +96,8 @@ function PinField({
       inputMode="numeric"
       autoComplete={auto}
       maxLength={4}
+      enterKeyHint="next"
+      revealable
       value={value}
       error={error}
       onChange={(e) => {

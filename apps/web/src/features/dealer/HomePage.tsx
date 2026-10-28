@@ -4,12 +4,13 @@ import { Link, useNavigate } from 'react-router';
 import { DealerHome } from '../../lib/api/schemas.ts';
 import { useI18n } from '../../lib/i18n/index.ts';
 import { useServices } from '../../lib/services.ts';
-import { Button, ErrorState, Skeleton } from '../../ui/index.ts';
+import { Button, ErrorState, Icon, Skeleton } from '../../ui/index.ts';
 
 const CACHE_KEY = '24m.home';
-const BIG =
-  'flex min-h-14 items-center justify-center rounded-btn border-2 border-border text-lg font-semibold';
-const NAV = 'flex min-h-12 items-center font-semibold underline underline-offset-4';
+const TILE =
+  'flex min-h-24 flex-col items-center justify-center gap-2 rounded-card border-2 border-border bg-surface p-3 text-center text-lg font-semibold active:scale-[0.98] transition-transform';
+const ROW =
+  'flex min-h-14 items-center gap-3 rounded-card border border-border px-4 font-semibold active:bg-surface-2';
 
 function readCache(): DealerHome | null {
   try {
@@ -59,16 +60,21 @@ export function HomePage(): ReactNode {
       <nav className="grid gap-3" aria-label={i.t('nav.home')}>
         <Link
           to="/scan"
-          className="flex min-h-16 items-center justify-center rounded-btn bg-success text-xl font-bold text-white"
+          className="flex min-h-28 flex-wrap items-center justify-center gap-x-3 gap-y-1 rounded-card bg-success p-4 text-center text-2xl font-bold text-white shadow-md transition-transform active:scale-[0.98]"
         >
+          <Icon name="scan" className="h-9 w-9" />
           {i.t('home.scan')}
         </Link>
-        <Link to="/type" className={BIG}>
-          {i.t('home.type')}
-        </Link>
-        <Link to="/batch" className={BIG}>
-          {i.t('home.batch')}
-        </Link>
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-3">
+          <Link to="/batch" className={TILE}>
+            <Icon name="layers" className="h-7 w-7" />
+            {i.t('home.batch')}
+          </Link>
+          <Link to="/type" className={TILE}>
+            <Icon name="keyboard" className="h-7 w-7" />
+            {i.t('home.type')}
+          </Link>
+        </div>
       </nav>
       {home === null ? (
         failed ? (
@@ -98,18 +104,17 @@ function DealerNav(): ReactNode {
   const navigate = useNavigate();
   return (
     <nav aria-label={i.t('nav.history')} className="flex flex-col gap-2">
-      <Link to="/history" className={NAV}>
-        {i.t('nav.history')}
+      <Link to="/history" className={ROW}>
+        <Icon name="history" />
+        <span className="flex-1">{i.t('nav.history')}</span>
+        <Icon name="chevron" className="h-5 w-5 text-muted" />
       </Link>
-      <Link to="/pin" className={NAV}>
-        {i.t('nav.pin')}
+      <Link to="/pin" className={ROW}>
+        <Icon name="lock" />
+        <span className="flex-1">{i.t('nav.pin')}</span>
+        <Icon name="chevron" className="h-5 w-5 text-muted" />
       </Link>
-      <Button
-        variant="ghost"
-        onClick={() => {
-          void signOut().then(() => navigate('/login'));
-        }}
-      >
+      <Button variant="ghost" onClick={() => signOut().then(() => navigate('/login'))}>
         {i.t('nav.logout')}
       </Button>
     </nav>
@@ -121,7 +126,7 @@ function Totals({ label, count }: { readonly label: string; readonly count: numb
   return (
     <div className="min-w-0 rounded-card bg-surface-2 p-4 break-words">
       <h2 className="text-muted">{label}</h2>
-      <p className="text-2xl font-bold">{t('home.validated', { count })}</p>
+      <p className="text-2xl font-bold tabular-nums">{t('home.validated', { count })}</p>
     </div>
   );
 }

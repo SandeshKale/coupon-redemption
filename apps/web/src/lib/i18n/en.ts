@@ -280,6 +280,8 @@ export const en = {
   'm24.mobileHint': 'Enter a 10-digit mobile number.',
   'nav.back': 'Back',
   'home.batch': 'Scan several coupons',
+  'common.show': 'Show',
+  'common.hide': 'Hide',
   'batch.title': 'Scan several coupons',
   'batch.help':
     'Scan one coupon after another. Valid ones are listed below. Then validate them all together.',

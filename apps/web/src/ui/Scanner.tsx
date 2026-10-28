@@ -3,6 +3,7 @@ import { type ReactNode, useEffect } from 'react';
 import { type Key, useI18n } from '../lib/i18n/index.ts';
 
 import { Button } from './Button.tsx';
+import { Spinner } from './Spinner.tsx';
 import { type CameraPhase, useCamera } from './useCamera.ts';
 
 export interface ScannerProps {
@@ -20,6 +21,15 @@ const MESSAGE: Record<Exclude<CameraPhase, 'scanning'>, Key> = {
   error: 'scanner.denied',
 };
 
+/** A short buzz tells a dealer the scan was read without looking at the screen. */
+function buzz(): void {
+  try {
+    if ('vibrate' in navigator) navigator.vibrate(60);
+  } catch {
+    // feedback only
+  }
+}
+
 /** Explains the camera permission first; denial falls back to typing (EC-051). Esc closes (2.1.2). */
 export function Scanner({
   onCode,
@@ -28,7 +38,14 @@ export function Scanner({
   media = (navigator as Partial<Navigator>).mediaDevices,
 }: ScannerProps): ReactNode {
   const { t } = useI18n();
-  const { video, phase, start, stop } = useCamera(media, onCode, paused);
+  const { video, phase, start, stop } = useCamera(
+    media,
+    (text) => {
+      buzz();
+      onCode(text);
+    },
+    paused,
+  );
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') {
@@ -51,17 +68,23 @@ export function Scanner({
           className={`h-full w-full object-cover ${phase === 'scanning' ? '' : 'hidden'}`}
           aria-label={t('scanner.aim')}
         />
-        {phase === 'scanning' ? null : (
+        {phase === 'scanning' ? (
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-[18%] rounded-2xl border-4 border-white/80 shadow-[0_0_0_999px_rgba(0,0,0,0.35)]"
+          />
+        ) : (
           <p
             role="status"
-            className="absolute inset-0 flex items-center justify-center p-6 text-center text-white"
+            className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-center text-white"
           >
+            {phase === 'starting' ? <Spinner className="h-8 w-8" /> : null}
             {t(MESSAGE[phase])}
           </p>
         )}
       </div>
       {phase === 'idle' ? (
-        <Button size="lg" onClick={() => void start()}>
+        <Button size="lg" onClick={() => start()}>
           {t('scanner.start')}
         </Button>
       ) : null}

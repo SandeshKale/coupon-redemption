@@ -27,7 +27,7 @@ export function ResultCard({
     <section
       role={variant === 'invalid' ? 'alert' : 'status'}
       aria-live={variant === 'invalid' ? 'assertive' : 'polite'}
-      className={`min-h-40 min-w-0 rounded-card border-2 p-4 sm:p-5 ${s.box}`}
+      className={`pop-in min-h-40 min-w-0 rounded-card border-2 p-4 sm:p-5 ${s.box}`}
     >
       <p className="flex items-start gap-3 text-2xl font-bold">
         <span aria-hidden="true" className="text-3xl leading-none">

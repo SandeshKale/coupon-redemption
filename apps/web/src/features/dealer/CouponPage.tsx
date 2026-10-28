@@ -1,5 +1,5 @@
 import { normaliseCode } from '@24m/shared';
-import { type ReactNode, useCallback, useEffect, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
 
 import type { ApiFailure } from '../../lib/api/client.ts';
@@ -8,7 +8,7 @@ import { useI18n } from '../../lib/i18n/index.ts';
 import { useNetwork } from '../../lib/network/status.ts';
 import { useServices } from '../../lib/services.ts';
 import { reportTiming } from '../../lib/telemetry.ts';
-import { Banner, Button, ResultCard, Skeleton } from '../../ui/index.ts';
+import { Banner, Button, Logo, ResultCard, Skeleton } from '../../ui/index.ts';
 
 import { failureView, resultView } from './resultCopy.ts';
 
@@ -23,7 +23,9 @@ type View =
   | { kind: 'failed'; error: ApiFailure };
 
 const LINK =
-  'flex min-h-14 items-center justify-center rounded-btn border-2 border-border font-semibold';
+  'flex min-h-14 items-center justify-center rounded-btn border-2 border-border font-semibold active:bg-surface-2';
+const LINK_PRIMARY =
+  'flex min-h-14 items-center justify-center rounded-btn bg-success text-lg font-semibold text-white active:brightness-90';
 
 /**
  * /c/:code: what the phone camera opens. Anyone sees whether the coupon is genuine and its
@@ -37,6 +39,7 @@ export function CouponPage(): ReactNode {
   const net = useNetwork();
   const [view, setView] = useState<View>({ kind: 'loading' });
   const [busy, setBusy] = useState(false);
+  const inFlight = useRef(false);
   const raw = params['code'] ?? '';
 
   const load = useCallback(async () => {
@@ -76,12 +79,18 @@ export function CouponPage(): ReactNode {
   }, [load]);
 
   const validate = async (code: string): Promise<void> => {
+    // One validation per tap, however fast the taps come.
+    if (inFlight.current) return;
+    inFlight.current = true;
     setBusy(true);
     const r = await api.rpc('validate_coupon', { p_code: code }, CheckResponse);
+    inFlight.current = false;
     setBusy(false);
     if (!r.ok) setView({ kind: 'failed', error: r.error });
-    else if (r.data.result === 'VALIDATED') setView({ kind: 'validated', data: r.data });
-    else setView({ kind: 'checked', data: r.data, code });
+    else if (r.data.result === 'VALIDATED') {
+      if ('vibrate' in navigator) navigator.vibrate([80, 40, 80]);
+      setView({ kind: 'validated', data: r.data });
+    } else setView({ kind: 'checked', data: r.data, code });
   };
 
   return (
@@ -90,7 +99,7 @@ export function CouponPage(): ReactNode {
       {net === 'slow' && view.kind === 'loading' ? (
         <Banner tone="info">{i.t('state.slow')}</Banner>
       ) : null}
-      <CouponBody view={view} busy={busy} onValidate={validate} onRetry={() => void load()} />
+      <CouponBody view={view} busy={busy} onValidate={validate} onRetry={() => load()} />
     </div>
   );
 }
@@ -104,7 +113,7 @@ function CouponBody({
   readonly view: View;
   readonly busy: boolean;
   readonly onValidate: (code: string) => Promise<void>;
-  readonly onRetry: () => void;
+  readonly onRetry: () => unknown;
 }): ReactNode {
   const i = useI18n();
   switch (view.kind) {
@@ -137,7 +146,7 @@ function FailedResult({
   onRetry,
 }: {
   readonly error: ApiFailure;
-  readonly onRetry: () => void;
+  readonly onRetry: () => unknown;
 }): ReactNode {
   const i = useI18n();
   const f = failureView(error, i);
@@ -163,7 +172,7 @@ function ValidatedResult({ data }: { readonly data: CheckResponse }): ReactNode 
       <ResultCard variant="valid" title={i.t('result.validated')}>
         {data.serial === undefined ? null : <p>{i.t('result.serial', { serial: data.serial })}</p>}
       </ResultCard>
-      <Link to="/scan" className={LINK}>
+      <Link to="/scan" className={LINK_PRIMARY}>
         {i.t('action.scanNext')}
       </Link>
       <HomeLink />
@@ -192,8 +201,8 @@ function CheckedResult({
         {r.canValidate ? <p className="font-semibold">{i.t('public.state.ACTIVE')}</p> : null}
       </ResultCard>
       {r.canValidate ? (
-        <div className="sticky bottom-0 bg-surface pb-4">
-          <Button size="lg" loading={busy} onClick={() => void onValidate(code)}>
+        <div className="sticky bottom-0 bg-surface pt-2 pb-[max(1rem,env(safe-area-inset-bottom))]">
+          <Button size="lg" loading={busy} onClick={() => onValidate(code)}>
             {i.t('action.validate')}
           </Button>
         </div>
@@ -228,6 +237,9 @@ function PublicResult({ view }: { readonly view: Extract<View, { kind: 'public' 
         : 'invalid';
   return (
     <>
+      <div className="flex justify-center py-2">
+        <Logo className="h-14 w-auto" />
+      </div>
       <ResultCard variant={variant} title={title}>
         {genuine ? <p className="font-semibold">{i.t(`public.state.${state}`)}</p> : null}
       </ResultCard>

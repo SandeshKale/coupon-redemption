@@ -77,14 +77,14 @@ function BackOffice({ profile }: { readonly profile: Profile }): ReactNode {
 function BackOfficeNav({ links }: { readonly links: readonly [string, Key][] }): ReactNode {
   const { t } = useI18n();
   return (
-    <nav aria-label={t('app.name')} className="mb-4 flex flex-wrap gap-2">
+    <nav aria-label={t('app.name')} className="mb-4 flex gap-2 overflow-x-auto pb-1 sm:flex-wrap">
       {links.map(([to, key]) => (
         <NavLink
           key={to}
           to={to}
           end
           className={({ isActive }) =>
-            `inline-flex min-h-12 items-center rounded-btn px-3 font-semibold ${isActive ? 'bg-ink text-white' : 'bg-surface-2'}`
+            `inline-flex min-h-12 shrink-0 items-center rounded-btn px-3 font-semibold whitespace-nowrap ${isActive ? 'bg-ink text-white' : 'bg-surface-2'}`
           }
         >
           {t(key)}

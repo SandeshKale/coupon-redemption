@@ -105,14 +105,16 @@ export function BatchPage(): ReactNode {
           {i.t('batch.summary', { done, total: items.length })}
         </p>
       ) : null}
-      <Button
-        size="lg"
-        loading={busy}
-        disabledReason={ready === 0 ? i.t('batch.none') : null}
-        onClick={() => void validateAll()}
-      >
-        {i.t('batch.validateAll', { n: ready })}
-      </Button>
+      <div className="sticky bottom-0 z-10 bg-surface pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <Button
+          size="lg"
+          loading={busy}
+          disabledReason={ready === 0 ? i.t('batch.none') : null}
+          onClick={() => validateAll()}
+        >
+          {i.t('batch.validateAll', { n: ready })}
+        </Button>
+      </div>
       <CodeInput onValid={(code) => void add(code)} />
     </div>
   );

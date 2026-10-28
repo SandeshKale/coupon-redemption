@@ -5,7 +5,7 @@ import { useNavigate, useSearchParams } from 'react-router';
 import { loadAuthClient } from '../../lib/auth/client.ts';
 import { useI18n } from '../../lib/i18n/index.ts';
 import { useServices } from '../../lib/services.ts';
-import { Button, Field, ResultCard } from '../../ui/index.ts';
+import { Button, Field, Logo, ResultCard } from '../../ui/index.ts';
 
 /** Only same-site paths: never an address on another site. */
 export function safeNext(raw: string | null): string {
@@ -20,7 +20,10 @@ export function LoginPage(): ReactNode {
   const i = useI18n();
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-bold">{i.t('login.title')}</h1>
+      <div className="flex flex-col items-center gap-3 pt-2 text-center">
+        <Logo className="h-16 w-auto" />
+        <h1 className="text-2xl font-bold">{i.t('login.title')}</h1>
+      </div>
       <PinLogin />
       <section className="flex flex-col gap-2">
         <h2 className="text-xl font-bold">{i.t('login.staffTitle')}</h2>
@@ -38,14 +41,18 @@ function PinLogin(): ReactNode {
   const [mobile, setMobile] = useState('');
   const [pin, setPin] = useState('');
   const [busy, setBusy] = useState(false);
+  const inFlight = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const e164 = normaliseE164(mobile);
   const ready = e164 !== null && /^[0-9]{4}$/.test(pin);
   const submit = async (): Promise<void> => {
-    if (e164 === null) return;
+    // A double tap or a held Enter key must not send the PIN twice (it would count as two tries).
+    if (e164 === null || inFlight.current) return;
+    inFlight.current = true;
     setBusy(true);
     setError(null);
     const r = await pinLogin(e164, pin);
+    inFlight.current = false;
     setBusy(false);
     if (r === 'ok') {
       void navigate(safeNext(params.get('next')), { replace: true });
@@ -77,6 +84,7 @@ function PinLogin(): ReactNode {
         }}
         autoComplete="tel"
         inputMode="tel"
+        enterKeyHint="next"
         required
       />
       <Field
@@ -89,6 +97,8 @@ function PinLogin(): ReactNode {
         autoComplete="current-password"
         inputMode="numeric"
         maxLength={4}
+        enterKeyHint="go"
+        revealable
         required
       />
       {error === null ? null : <ResultCard variant="invalid" title={error} />}
@@ -112,12 +122,14 @@ type Step =
 function useM24Login(): {
   step: Step;
   error: string | null;
+  busy: boolean;
   submit: (email: string, password: string, code: string) => Promise<void>;
 } {
   const i = useI18n();
   const navigate = useNavigate();
   const [step, setStep] = useState<Step>({ kind: 'password' });
   const [error, setError] = useState<string | null>(null);
+  const [working, setWorking] = useState(false);
   const busy = useRef(false);
   const afterPassword = async (): Promise<void> => {
     const auth = await loadAuthClient();
@@ -152,6 +164,7 @@ function useM24Login(): {
     // A double tap must not start a second sign-in (a second enrolment would be refused).
     if (busy.current) return;
     busy.current = true;
+    setWorking(true);
     setError(null);
     try {
       const auth = await loadAuthClient();
@@ -169,9 +182,10 @@ function useM24Login(): {
       else void navigate('/');
     } finally {
       busy.current = false;
+      setWorking(false);
     }
   };
-  return { step, error, submit };
+  return { step, error, busy: working, submit };
 }
 
 function M24Login(): ReactNode {
@@ -179,7 +193,7 @@ function M24Login(): ReactNode {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
-  const { step, error, submit } = useM24Login();
+  const { step, error, busy, submit } = useM24Login();
   return (
     <form
       className="flex flex-col gap-3 rounded-card border border-border p-4"
@@ -227,7 +241,7 @@ function M24Login(): ReactNode {
         </>
       )}
       {error === null ? null : <ResultCard variant="invalid" title={error} />}
-      <Button type="submit">
+      <Button type="submit" loading={busy}>
         {step.kind === 'password' ? i.t('login.submit') : i.t('login.verify')}
       </Button>
     </form>

@@ -87,7 +87,7 @@ export function DealerActions({
       <Button
         variant={active ? 'danger' : 'secondary'}
         onClick={() =>
-          void call(
+          call(
             'admin-user-status',
             {
               user_id: userId,
@@ -144,7 +144,7 @@ export function PinReset({ userId }: { readonly userId: number }): ReactNode {
           />
           <Button
             disabledReason={/^[0-9]{4}$/.test(pin) ? null : i.t('pin.rules')}
-            onClick={() => void save()}
+            onClick={() => save()}
           >
             {i.t('common.save')}
           </Button>

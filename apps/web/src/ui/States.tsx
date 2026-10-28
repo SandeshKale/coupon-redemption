@@ -13,7 +13,7 @@ export function ErrorState({
   onRetry,
 }: {
   readonly message?: string;
-  readonly onRetry?: () => void;
+  readonly onRetry?: () => unknown;
 }): ReactNode {
   const { t } = useI18n();
   return (

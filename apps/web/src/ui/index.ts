@@ -5,10 +5,13 @@ export { type Column, DataTable, downloadBlob, downloadText, toCsv } from './Dat
 export { Dialog } from './Dialog.tsx';
 export { Field, Select } from './Field.tsx';
 export { HelpLink } from './HelpLink.tsx';
+export { Icon, type IconName } from './Icon.tsx';
 export { LanguageSwitch } from './LanguageSwitch.tsx';
+export { Logo } from './Logo.tsx';
 export { Money } from './Money.tsx';
 export { ResultCard, type ResultVariant } from './ResultCard.tsx';
 export { Scanner } from './Scanner.tsx';
 export { Skeleton } from './Skeleton.tsx';
+export { Spinner } from './Spinner.tsx';
 export { EmptyState, ErrorState } from './States.tsx';
 export { StatusPill, type Tone } from './StatusPill.tsx';
