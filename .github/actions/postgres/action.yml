@@ -12,6 +12,8 @@ runs:
         sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
         sudo apt-get install -y -qq postgresql-17 postgresql-client-17 postgresql-17-pgtap \
           postgresql-17-plpgsql-check libtap-parser-sourcehandler-pgtap-perl
+        # Newer runner images no longer auto-create the 17/main cluster on install.
+        pg_lsclusters -h | awk '$1 == "17" && $2 == "main"' | grep -q . || sudo pg_createcluster 17 main
         sudo pg_ctlcluster 17 main start
         port=$(pg_lsclusters -h | awk '$1 == "17" { print $3 }')
         sudo -u postgres psql -p "$port" -c "create role $USER superuser login"
