@@ -3,6 +3,9 @@ import type { Lang } from './index.ts';
 /** Plain explanations of back-office refusal codes. Kept apart so only the back-office loads them. */
 export const ERRORS: Record<Lang, Record<string, string>> = {
   en: {
+    NOT_HOLDABLE:
+      'This coupon cannot be held. If 24M has redeemed it, reverse the redemption first.',
+    NOT_REVERSIBLE: 'Only a validated or redeemed coupon can be reversed.',
     BAD_HEADER: 'The first row of the file must be: code, name, mobile, city, distributor_code.',
     SERIALS_NOT_VOIDABLE: 'Some of these serials cannot be voided because they are already in use.',
     LOT_NOT_EXPORTED:
@@ -35,6 +38,9 @@ export const ERRORS: Record<Lang, Record<string, string>> = {
     INTERNAL: 'Something went wrong on our side. Try again.',
   },
   hi: {
+    NOT_HOLDABLE:
+      'इस कूपन को होल्ड नहीं किया जा सकता। अगर 24M इसे रिडीम कर चुका है, तो पहले रिडेम्पशन रिवर्स करें।',
+    NOT_REVERSIBLE: 'केवल वैलिडेट या रिडीम किया गया कूपन ही रिवर्स हो सकता है।',
     BAD_HEADER: 'फ़ाइल की पहली पंक्ति यह होनी चाहिए: code, name, mobile, city, distributor_code।',
     SERIALS_NOT_VOIDABLE: 'इनमें से कुछ सीरियल रद्द नहीं हो सकते क्योंकि वे उपयोग में आ चुके हैं।',
     LOT_NOT_EXPORTED:
@@ -67,6 +73,9 @@ export const ERRORS: Record<Lang, Record<string, string>> = {
     INTERNAL: 'हमारी तरफ़ से कुछ गड़बड़ हुई। फिर कोशिश करें।',
   },
   kn: {
+    NOT_HOLDABLE:
+      'ಈ ಕೂಪನ್ ಅನ್ನು ತಡೆಹಿಡಿಯಲಾಗದು. 24M ಇದನ್ನು ರಿಡೀಮ್ ಮಾಡಿದ್ದರೆ, ಮೊದಲು ರಿಡೆಂಪ್ಷನ್ ರಿವರ್ಸ್ ಮಾಡಿ.',
+    NOT_REVERSIBLE: 'ವ್ಯಾಲಿಡೇಟ್ ಅಥವಾ ರಿಡೀಮ್ ಆದ ಕೂಪನ್ ಅನ್ನು ಮಾತ್ರ ರಿವರ್ಸ್ ಮಾಡಬಹುದು.',
     SERIALS_NOT_VOIDABLE: 'ಈ ಸೀರಿಯಲ್‌ಗಳಲ್ಲಿ ಕೆಲವು ಈಗಾಗಲೇ ಬಳಕೆಯಲ್ಲಿರುವುದರಿಂದ ರದ್ದು ಮಾಡಲಾಗುವುದಿಲ್ಲ.',
     LOT_NOT_EXPORTED:
       'ಈ ಲಾಟ್‌ನ ಪ್ರಿಂಟ್ ಫೈಲ್ ಇನ್ನೂ ಎಕ್ಸ್‌ಪೋರ್ಟ್ ಆಗಿಲ್ಲ. ಮೊದಲು ಪ್ರಿಂಟ್ ಫೈಲ್ ಎಕ್ಸ್‌ಪೋರ್ಟ್ ಮಾಡಿ.',

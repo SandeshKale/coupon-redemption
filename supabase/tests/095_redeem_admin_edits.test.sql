@@ -1,6 +1,6 @@
 -- 0018: Active → Validated → Redeemed (HQ), admin edits (mobile, helpline), PIN-reset rules, "/" codes, no expiry.
 begin;
-select plan(70);
+select plan(72);
 
 -- ── Life of a coupon ────────────────────────────────────────────────────────
 select is(tests.call('Owner A', format('public.validate_coupon(%L)', tests.code13('P24-0000001'))) ->> 'result', 'VALIDATED', 'a dealer validates');
@@ -33,7 +33,9 @@ select is(tests.call('Admin', $$public.redeem_coupons(array['P24-0000001', 'P24-
 select is(jsonb_array_length(tests.call('Admin', $$public.redeem_coupons(array['P24-0000001', 'P24-0000999', 'P24-0000101'], null)$$) -> 'not_redeemable'), 2, 'redeemed and not-yet-active coupons are listed as not redeemable');
 select throws_ok($$update public.coupon set status = 'ACTIVE' where serial = 'P24-0000001'$$, 'P0001', null, 'a redeemed coupon cannot go back to active');
 select throws_ok($$update public.coupon set status = 'VALIDATED' where serial = 'P24-0000001'$$, 'P0001', null, 'nor back to validated');
-select is(tests.err('Admin', format('public.reverse_redemption(%s, %L)', (select id from public.coupon where serial = 'P24-0000001'), 'wrong coupon')), 'NOT_REVERSIBLE', 'a redeemed coupon cannot be reversed');
+select is(tests.state('Admin', format('public.reverse_redemption(%s, %L)', (select id from public.coupon where serial = 'P24-0000001'), 'wrong coupon')), 'OK', 'a 24M admin can reverse a redemption made by HQ (0023)');
+select is(tests.status('P24-0000001'), 'VALIDATED', 'it is back to validated');
+select is(tests.call('Finance', $$public.redeem_coupons(array['P24-0000001'], 'CN/26/002')$$) ->> 'redeemed', '1', 'and can be redeemed again with the right credit note');
 select is(tests.call('anon', format('public.public_coupon_info(%L)', tests.code13('P24-0000001'))) ->> 'state', 'REDEEMED', 'public: redeemed');
 select is(tests.call('Owner B', format('public.validate_coupon(%L)', tests.code13('P24-0000001'))) ->> 'result', 'ALREADY_CLOSED', 'a dealer cannot validate a redeemed coupon');
 select is(tests.call('Owner A', format('public.validate_coupon(%L)', tests.code13('P24-0000002'))) ->> 'result', 'ALREADY_CLOSED', 'not even a dealer who never validated it, nor the same dealer');
