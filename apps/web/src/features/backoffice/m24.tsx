@@ -173,6 +173,73 @@ function ExportLot({
   );
 }
 
+/** From / to serial numbers plus one text, sent to a range function of the chosen lot. */
+function RangeSection({
+  title,
+  submitLabel,
+  fn,
+  lotId,
+  textField,
+  run,
+}: {
+  readonly title: string;
+  readonly submitLabel: string;
+  readonly fn: string;
+  readonly lotId: number;
+  readonly textField: { readonly name: string; readonly label: Key; readonly param: string };
+  readonly run: Run;
+}): ReactNode {
+  return (
+    <Section title={title}>
+      <ActionForm
+        submitLabel={submitLabel}
+        fields={[
+          { name: 'from', label: 'm24.from', type: 'number' },
+          { name: 'to', label: 'm24.to', type: 'number' },
+          { name: textField.name, label: textField.label },
+        ]}
+        onSubmit={(vals) =>
+          run(fn, {
+            p_lot_id: lotId,
+            p_serial_from: intOrNull(vals['from']),
+            p_serial_to: intOrNull(vals['to']),
+            [textField.param]: vals[textField.name],
+          })
+        }
+      />
+    </Section>
+  );
+}
+
+function VoidSection({
+  lots,
+  run,
+}: {
+  readonly lots: readonly LotOption[];
+  readonly run: Run;
+}): ReactNode {
+  const i = useI18n();
+  return (
+    <Section title={i.t('m24.void')}>
+      <ActionForm
+        submitLabel={i.t('m24.void')}
+        fields={[
+          { name: 'lot_id', label: 'col.lot', options: lots },
+          { name: 'serials', label: 'm24.voidHelp', type: 'textarea' },
+          { name: 'reason', label: 'common.reason' },
+        ]}
+        onSubmit={(vals) =>
+          run('void_serials', {
+            p_lot_id: Number(vals['lot_id']),
+            p_serials: (vals['serials'] ?? '').split(/\s+/).filter((x) => x !== ''),
+            p_reason: vals['reason'],
+          })
+        }
+      />
+    </Section>
+  );
+}
+
 function LotRangeActions({
   lots,
   run,
@@ -183,25 +250,10 @@ function LotRangeActions({
   const i = useI18n();
   const [lotId, setLotId] = useState('');
   const selected = Number(lotId === '' ? (lots[0]?.value ?? '0') : lotId);
+  const range = { lotId: selected, run };
   return (
     <>
-      <Section title={i.t('m24.void')}>
-        <ActionForm
-          submitLabel={i.t('m24.void')}
-          fields={[
-            { name: 'lot_id', label: 'col.lot', options: lots },
-            { name: 'serials', label: 'm24.voidHelp', type: 'textarea' },
-            { name: 'reason', label: 'common.reason' },
-          ]}
-          onSubmit={(vals) =>
-            run('void_serials', {
-              p_lot_id: Number(vals['lot_id']),
-              p_serials: (vals['serials'] ?? '').split(/\s+/).filter((x) => x !== ''),
-              p_reason: vals['reason'],
-            })
-          }
-        />
-      </Section>
+      <VoidSection lots={lots} run={run} />
       <Section title={i.t('m24.activate')}>
         <Select
           label={i.t('col.lot')}
@@ -230,24 +282,27 @@ function LotRangeActions({
           }
         />
       </Section>
-      <Section title={i.t('m24.block')}>
-        <ActionForm
-          submitLabel={i.t('m24.block')}
-          fields={[
-            { name: 'from', label: 'm24.from', type: 'number' },
-            { name: 'to', label: 'm24.to', type: 'number' },
-            { name: 'reason', label: 'common.reason' },
-          ]}
-          onSubmit={(vals) =>
-            run('block_range', {
-              p_lot_id: selected,
-              p_serial_from: intOrNull(vals['from']),
-              p_serial_to: intOrNull(vals['to']),
-              p_reason: vals['reason'],
-            })
-          }
-        />
-      </Section>
+      <RangeSection
+        title={i.t('m24.holdRange')}
+        submitLabel={i.t('m24.hold')}
+        fn="hold_range"
+        {...range}
+        textField={{ name: 'reason', label: 'common.reason', param: 'p_reason' }}
+      />
+      <RangeSection
+        title={i.t('m24.releaseRange')}
+        submitLabel={i.t('m24.release')}
+        fn="release_range"
+        {...range}
+        textField={{ name: 'note', label: 'common.notes', param: 'p_note' }}
+      />
+      <RangeSection
+        title={i.t('m24.block')}
+        submitLabel={i.t('m24.block')}
+        fn="block_range"
+        {...range}
+        textField={{ name: 'reason', label: 'common.reason', param: 'p_reason' }}
+      />
     </>
   );
 }

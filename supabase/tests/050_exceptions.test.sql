@@ -1,6 +1,6 @@
 -- 24M exceptions: hold, release, reverse, dispute resolution, redeem on behalf, lookup (EC-035, EC-036, EC-116).
 begin;
-select plan(21);
+select plan(23);
 
 select tests.redeem('Owner A', array[1]);
 select tests.redeem('Owner A', array[2]);
@@ -11,8 +11,10 @@ grant select on c to authenticated;
 select is(tests.err('Admin', format('public.hold_coupons(array[%s]::bigint[], %L)', (select id from c where serial = 'P24-0000001'), 'x')), 'REASON_REQUIRED', 'hold needs a reason');
 select is(tests.call('Admin', format('public.hold_coupons(array[%s]::bigint[], %L)', (select id from c where serial = 'P24-0000001'), 'investigate dealer'))::int, 1, 'hold');
 select is(tests.status('P24-0000001'), 'ON_HOLD', 'ON_HOLD');
-select is(tests.call('Admin', format('public.hold_coupons(array[%s]::bigint[], %L)', (select id from c where serial = 'P24-0000003'), 'not redeemed yet'))::int, 0,
-  'active coupons cannot be held');
+select is(tests.call('Admin', format('public.hold_coupons(array[%s]::bigint[], %L)', (select id from c where serial = 'P24-0000003'), 'not redeemed yet'))::int, 1,
+  'active coupons can be held');
+select is(tests.call('Admin', format('public.release_coupons(array[%s]::bigint[], %L)', (select id from c where serial = 'P24-0000003'), 'ok'))::int, 1, 'and released');
+select is(tests.status('P24-0000003'), 'ACTIVE', 'back to active');
 select is(tests.call('Admin', format('public.release_coupons(array[%s]::bigint[], %L)', (select id from c where serial = 'P24-0000001'), 'ok'))::int, 1, 'release');
 select is(tests.status('P24-0000001'), 'REDEEMED', 'back to the prior status');
 

@@ -53,6 +53,8 @@ insert into matrix values
   ($$public.activate_range(0, 1, 1, 'X', 'B', current_date)$$, '{M24_ADMIN}'),
   ($$public.block_range(0, 1, 1, 'reason text')$$, '{M24_ADMIN}'),
   ($$public.hold_coupons('{}', 'reason text')$$, '{M24_ADMIN}'),
+  ($$public.hold_range(0, 1, 1, 'reason text')$$, '{M24_ADMIN}'),
+  ($$public.release_range(0, 1, 1, 'note text')$$, '{M24_ADMIN}'),
   ($$public.release_coupons('{}', 'note')$$, '{M24_ADMIN}'),
   ($$public.reverse_redemption(0, 'reason text')$$, '{M24_ADMIN}'),
   ($$public.resolve_dispute(0, 'RELEASE', 'note text')$$, '{M24_ADMIN}'),

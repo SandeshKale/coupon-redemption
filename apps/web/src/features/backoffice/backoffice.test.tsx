@@ -383,6 +383,8 @@ describe('24M', () => {
       void_serials: () => (rpcs.push('void'), { void: 1 }),
       activate_range: () => (rpcs.push('activate'), { activated: 10 }),
       block_range: () => (rpcs.push('block'), { blocked: 1 }),
+      hold_range: () => (rpcs.push('hold'), { held: 4 }),
+      release_range: () => (rpcs.push('release'), { released: 4 }),
     });
     open('M24_ADMIN', '/m/lots');
     await userEvent.click(await screen.findByRole('button', { name: 'Generate codes' }));
@@ -420,8 +422,18 @@ describe('24M', () => {
     await userEvent.type(within(blk).getByLabelText('To serial no.'), '2');
     await userEvent.type(within(blk).getByLabelText('Reason'), 'recall test');
     await userEvent.click(within(blk).getByRole('button', { name: 'Block range' }));
+    const hold = screen.getByRole('heading', { name: 'Hold range' }).closest('section')!;
+    await userEvent.type(within(hold).getByLabelText('From serial no.'), '1');
+    await userEvent.type(within(hold).getByLabelText('To serial no.'), '4');
+    await userEvent.type(within(hold).getByLabelText('Reason'), 'spoiled roll');
+    await userEvent.click(within(hold).getByRole('button', { name: 'Hold' }));
+    const rel = screen.getByRole('heading', { name: 'Release held range' }).closest('section')!;
+    await userEvent.type(within(rel).getByLabelText('From serial no.'), '1');
+    await userEvent.type(within(rel).getByLabelText('To serial no.'), '4');
+    await userEvent.type(within(rel).getByLabelText('Notes'), 'found ok');
+    await userEvent.click(within(rel).getByRole('button', { name: 'Release' }));
     await waitFor(() => {
-      expect(rpcs).toEqual(['void', 'activate', 'block']);
+      expect(rpcs).toEqual(['void', 'activate', 'block', 'hold', 'release']);
     });
   });
 

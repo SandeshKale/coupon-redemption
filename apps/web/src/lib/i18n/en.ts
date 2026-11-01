@@ -116,6 +116,8 @@ export const en = {
   'm24.voidHelp': 'One serial per line',
   'm24.activate': 'Activate range',
   'm24.block': 'Block range',
+  'm24.holdRange': 'Hold range',
+  'm24.releaseRange': 'Release held range',
   'm24.from': 'From serial no.',
   'm24.to': 'To serial no.',
   'm24.batchNo': 'Batch number',

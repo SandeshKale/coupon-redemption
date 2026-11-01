@@ -118,6 +118,8 @@ export const hi: Record<Key, string> = {
   'm24.voidHelp': 'हर लाइन में एक सीरियल',
   'm24.activate': 'रेंज चालू करें',
   'm24.block': 'रेंज ब्लॉक करें',
+  'm24.holdRange': 'रेंज होल्ड करें',
+  'm24.releaseRange': 'होल्ड की गई रेंज छोड़ें',
   'm24.from': 'सीरियल नं. से',
   'm24.to': 'सीरियल नं. तक',
   'm24.batchNo': 'बैच नंबर',
